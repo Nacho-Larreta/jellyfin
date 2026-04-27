@@ -55,6 +55,10 @@ namespace Emby.Server.Implementations.Images
                 case CollectionType.photos:
                     includeItemTypes = new[] { BaseItemKind.Video, BaseItemKind.Photo };
                     break;
+                case CollectionType.courses:
+                case CollectionType.adultvideos:
+                    includeItemTypes = new[] { BaseItemKind.Video };
+                    break;
                 default:
                     includeItemTypes = new[] { BaseItemKind.Video, BaseItemKind.Audio, BaseItemKind.Photo, BaseItemKind.Movie, BaseItemKind.Series };
                     break;

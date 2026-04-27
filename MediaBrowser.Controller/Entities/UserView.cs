@@ -31,6 +31,8 @@ namespace MediaBrowser.Controller.Entities
             Jellyfin.Data.Enums.CollectionType.books,
             Jellyfin.Data.Enums.CollectionType.musicvideos,
             Jellyfin.Data.Enums.CollectionType.homevideos,
+            Jellyfin.Data.Enums.CollectionType.courses,
+            Jellyfin.Data.Enums.CollectionType.adultvideos,
             Jellyfin.Data.Enums.CollectionType.photos,
             Jellyfin.Data.Enums.CollectionType.music,
             Jellyfin.Data.Enums.CollectionType.boxsets

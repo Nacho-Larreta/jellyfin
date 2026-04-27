@@ -243,8 +243,11 @@ namespace MediaBrowser.Controller.Entities
                 }
                 else
                 {
-                    if (!user.HasPermission(PermissionKind.EnableAllFolders)
-                        && !user.GetPreferenceValues<Guid>(PreferenceKind.EnabledFolders).Contains(Id))
+                    var enabledFolders = user.GetPreferenceValues<Guid>(PreferenceKind.EnabledFolders);
+                    var requiresExplicitFolderAccess = this is IHasCollectionType { CollectionType: CollectionType.adultvideos };
+
+                    if ((!user.HasPermission(PermissionKind.EnableAllFolders) || requiresExplicitFolderAccess)
+                        && !enabledFolders.Contains(Id))
                     {
                         return false;
                     }

@@ -74,6 +74,16 @@ public enum CollectionType
     folders = 12,
 
     /// <summary>
+    /// Courses collection.
+    /// </summary>
+    courses = 13,
+
+    /// <summary>
+    /// Adult videos collection.
+    /// </summary>
+    adultvideos = 14,
+
+    /// <summary>
     /// Tv show series collection.
     /// </summary>
     [OpenApiIgnoreEnum]

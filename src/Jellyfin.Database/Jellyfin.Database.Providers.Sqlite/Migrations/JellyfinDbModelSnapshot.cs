@@ -15,7 +15,7 @@ namespace Jellyfin.Server.Implementations.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "9.0.9");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.7");
 
             modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.AccessSchedule", b =>
                 {
@@ -1089,6 +1089,113 @@ namespace Jellyfin.Server.Implementations.Migrations
                     b.HasAnnotation("Sqlite:UseSqlReturningClause", false);
                 });
 
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelector", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AutoSelectSingleProfile")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("DateModified")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId")
+                        .IsUnique();
+
+                    b.ToTable("ProfileSelectors");
+
+                    b.HasAnnotation("Sqlite:UseSqlReturningClause", false);
+                });
+
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelectorDeviceState", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ActiveProfileUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastActivatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProfileSelectorId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActiveProfileUserId");
+
+                    b.HasIndex("ProfileSelectorId", "DeviceId")
+                        .IsUnique();
+
+                    b.ToTable("ProfileSelectorDeviceStates");
+
+                    b.HasAnnotation("Sqlite:UseSqlReturningClause", false);
+                });
+
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelectorMember", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FailedPinAttemptCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsVisible")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastFailedPinAttemptUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PinHash")
+                        .HasMaxLength(65535)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("PinLockoutUntilUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProfileSelectorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProfileUserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProfileUserId")
+                        .IsUnique();
+
+                    b.HasIndex("ProfileSelectorId", "ProfileUserId")
+                        .IsUnique();
+
+                    b.ToTable("ProfileSelectorMembers");
+
+                    b.HasAnnotation("Sqlite:UseSqlReturningClause", false);
+                });
+
             modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.Security.ApiKey", b =>
                 {
                     b.Property<int>("Id")
@@ -1626,6 +1733,44 @@ namespace Jellyfin.Server.Implementations.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelector", b =>
+                {
+                    b.HasOne("Jellyfin.Database.Implementations.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelectorDeviceState", b =>
+                {
+                    b.HasOne("Jellyfin.Database.Implementations.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActiveProfileUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Jellyfin.Database.Implementations.Entities.ProfileSelector", null)
+                        .WithMany("DeviceStates")
+                        .HasForeignKey("ProfileSelectorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelectorMember", b =>
+                {
+                    b.HasOne("Jellyfin.Database.Implementations.Entities.ProfileSelector", null)
+                        .WithMany("Members")
+                        .HasForeignKey("ProfileSelectorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Jellyfin.Database.Implementations.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ProfileUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.Security.Device", b =>
                 {
                     b.HasOne("Jellyfin.Database.Implementations.Entities.User", "User")
@@ -1696,6 +1841,13 @@ namespace Jellyfin.Server.Implementations.Migrations
             modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.People", b =>
                 {
                     b.Navigation("BaseItems");
+                });
+
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelector", b =>
+                {
+                    b.Navigation("DeviceStates");
+
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.User", b =>

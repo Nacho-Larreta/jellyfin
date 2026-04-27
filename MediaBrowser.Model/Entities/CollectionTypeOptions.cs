@@ -45,5 +45,15 @@ public enum CollectionTypeOptions
     /// <summary>
     /// Mixed Movies and TV Shows.
     /// </summary>
-    mixed = 7
+    mixed = 7,
+
+    /// <summary>
+    /// Courses.
+    /// </summary>
+    courses = 8,
+
+    /// <summary>
+    /// Adult videos.
+    /// </summary>
+    adultvideos = 9
 }

@@ -54,6 +54,21 @@ public class JellyfinDbContext(DbContextOptions<JellyfinDbContext> options, ILog
     public DbSet<DisplayPreferences> DisplayPreferences => Set<DisplayPreferences>();
 
     /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> containing profile selectors.
+    /// </summary>
+    public DbSet<ProfileSelector> ProfileSelectors => Set<ProfileSelector>();
+
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> containing profile selector members.
+    /// </summary>
+    public DbSet<ProfileSelectorMember> ProfileSelectorMembers => Set<ProfileSelectorMember>();
+
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> containing profile selector device states.
+    /// </summary>
+    public DbSet<ProfileSelectorDeviceState> ProfileSelectorDeviceStates => Set<ProfileSelectorDeviceState>();
+
+    /// <summary>
     /// Gets the <see cref="DbSet{TEntity}"/> containing the image infos.
     /// </summary>
     public DbSet<ImageInfo> ImageInfos => Set<ImageInfo>();

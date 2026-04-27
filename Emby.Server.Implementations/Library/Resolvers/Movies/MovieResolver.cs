@@ -33,6 +33,8 @@ namespace Emby.Server.Implementations.Library.Resolvers.Movies
         {
             CollectionType.movies,
             CollectionType.homevideos,
+            CollectionType.courses,
+            CollectionType.adultvideos,
             CollectionType.musicvideos,
             CollectionType.tvshows,
             CollectionType.photos
@@ -105,7 +107,9 @@ namespace Emby.Server.Implementations.Library.Resolvers.Movies
                     movie = FindMovie<MusicVideo>(args, args.Path, args.Parent, files, DirectoryService, collectionType, false);
                 }
 
-                if (collectionType == CollectionType.homevideos)
+                if (collectionType == CollectionType.homevideos
+                    || collectionType == CollectionType.courses
+                    || collectionType == CollectionType.adultvideos)
                 {
                     movie = FindMovie<Video>(args, args.Path, args.Parent, files, DirectoryService, collectionType, false);
                 }
@@ -157,7 +161,10 @@ namespace Emby.Server.Implementations.Library.Resolvers.Movies
             {
                 item = ResolveVideo<Movie>(args, true);
             }
-            else if (collectionType == CollectionType.homevideos || collectionType == CollectionType.photos)
+            else if (collectionType == CollectionType.homevideos
+                     || collectionType == CollectionType.courses
+                     || collectionType == CollectionType.adultvideos
+                     || collectionType == CollectionType.photos)
             {
                 item = ResolveVideo<Video>(args, false);
             }
@@ -200,7 +207,10 @@ namespace Emby.Server.Implementations.Library.Resolvers.Movies
                 return ResolveVideos<MusicVideo>(parent, files, true, collectionType, false);
             }
 
-            if (collectionType == CollectionType.homevideos || collectionType == CollectionType.photos)
+            if (collectionType == CollectionType.homevideos
+                || collectionType == CollectionType.courses
+                || collectionType == CollectionType.adultvideos
+                || collectionType == CollectionType.photos)
             {
                 return ResolveVideos<Video>(parent, files, false, collectionType, false);
             }
