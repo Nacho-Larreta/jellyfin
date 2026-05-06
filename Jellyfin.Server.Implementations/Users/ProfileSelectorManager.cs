@@ -64,7 +64,8 @@ namespace Jellyfin.Server.Implementations.Users
         /// <inheritdoc />
         public async Task<ProfileSelectorDto?> GetCurrentSelectorAsync(Guid currentUserId, string deviceId, bool includeHiddenProfiles, CancellationToken cancellationToken)
         {
-            await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            await using var configuredContext = dbContext.ConfigureAwait(false);
             var selector = await LoadSelectorForCurrentUserAsync(dbContext, currentUserId, cancellationToken).ConfigureAwait(false);
             if (selector is null || !selector.IsEnabled)
             {
@@ -77,7 +78,8 @@ namespace Jellyfin.Server.Implementations.Users
         /// <inheritdoc />
         public async Task<ProfileSelectorDto?> GetSelectorForOwnerAsync(Guid ownerUserId, string deviceId, bool includeHiddenProfiles, CancellationToken cancellationToken)
         {
-            await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            await using var configuredContext = dbContext.ConfigureAwait(false);
             var selector = await QuerySelectors(dbContext)
                 .FirstOrDefaultAsync(entity => entity.OwnerUserId.Equals(ownerUserId), cancellationToken)
                 .ConfigureAwait(false);
@@ -90,7 +92,8 @@ namespace Jellyfin.Server.Implementations.Users
         /// <inheritdoc />
         public async Task<IReadOnlyList<Guid>> GetSecondaryProfileUserIdsAsync(CancellationToken cancellationToken)
         {
-            await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            await using var configuredContext = dbContext.ConfigureAwait(false);
 
             return await dbContext.ProfileSelectorMembers
                 .AsNoTracking()
@@ -116,7 +119,8 @@ namespace Jellyfin.Server.Implementations.Users
             var ownerUser = GetUserOrThrow(ownerUserId);
             EnsureOwnerUser(ownerUser);
 
-            await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            await using var configuredContext = dbContext.ConfigureAwait(false);
             var selector = await QuerySelectors(dbContext)
                 .FirstOrDefaultAsync(entity => entity.OwnerUserId.Equals(ownerUserId), cancellationToken)
                 .ConfigureAwait(false);
@@ -180,7 +184,8 @@ namespace Jellyfin.Server.Implementations.Users
             ArgumentException.ThrowIfNullOrEmpty(context.Version);
             ArgumentException.ThrowIfNullOrEmpty(context.RemoteEndPoint);
 
-            await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            await using var configuredContext = dbContext.ConfigureAwait(false);
             var selector = await LoadSelectorForCurrentUserAsync(dbContext, context.CurrentUserId, cancellationToken).ConfigureAwait(false);
             if (selector is null || !selector.IsEnabled)
             {
@@ -285,7 +290,8 @@ namespace Jellyfin.Server.Implementations.Users
         {
             ValidatePin(pin);
 
-            await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            await using var configuredContext = dbContext.ConfigureAwait(false);
             var selector = await QuerySelectors(dbContext)
                 .FirstOrDefaultAsync(entity => entity.OwnerUserId.Equals(ownerUserId), cancellationToken)
                 .ConfigureAwait(false);
@@ -315,7 +321,8 @@ namespace Jellyfin.Server.Implementations.Users
         /// <inheritdoc />
         public async Task ClearProfilePinAsync(Guid ownerUserId, Guid profileUserId, string? currentPin, CancellationToken cancellationToken)
         {
-            await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            await using var configuredContext = dbContext.ConfigureAwait(false);
             var selector = await QuerySelectors(dbContext)
                 .FirstOrDefaultAsync(entity => entity.OwnerUserId.Equals(ownerUserId), cancellationToken)
                 .ConfigureAwait(false);

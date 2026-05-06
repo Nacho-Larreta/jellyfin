@@ -181,12 +181,15 @@ public class ProfileSelectorsController : BaseJellyfinApiController
                 AutoSelectSingleProfile = request.AutoSelectSingleProfile
             };
 
-            configuration.Profiles.AddRange(request.Profiles.ConvertAll(profile => new ProfileSelectorMemberConfiguration
+            foreach (var profile in request.Profiles)
             {
-                ProfileUserId = profile.ProfileUserId,
-                DisplayOrder = profile.DisplayOrder,
-                IsVisible = profile.IsVisible
-            }));
+                configuration.Profiles.Add(new ProfileSelectorMemberConfiguration
+                {
+                    ProfileUserId = profile.ProfileUserId,
+                    DisplayOrder = profile.DisplayOrder,
+                    IsVisible = profile.IsVisible
+                });
+            }
 
             var selector = await _profileSelectorManager.UpdateSelectorAsync(
                 ownerUserId,

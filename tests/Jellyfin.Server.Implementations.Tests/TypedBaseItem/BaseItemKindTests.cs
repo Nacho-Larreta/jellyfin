@@ -19,6 +19,7 @@ namespace Jellyfin.Server.Implementations.Tests.TypedBaseItem
                     var baseItemTypes = assembly.GetTypes()
                         .Where(targetType => targetType.IsClass
                                              && !targetType.IsAbstract
+                                             && !targetType.IsNested
                                              && targetType.IsSubclassOf(typeof(MediaBrowser.Controller.Entities.BaseItem)));
                     foreach (var baseItemType in baseItemTypes)
                     {

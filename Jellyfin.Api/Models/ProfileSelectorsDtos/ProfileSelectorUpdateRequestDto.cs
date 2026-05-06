@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 
 namespace Jellyfin.Api.Models.ProfileSelectorsDtos;
@@ -14,7 +15,7 @@ public class ProfileSelectorUpdateRequestDto
     /// </summary>
     public ProfileSelectorUpdateRequestDto()
     {
-        Profiles = new List<ProfileSelectorMemberUpdateRequestDto>();
+        Profiles = new Collection<ProfileSelectorMemberUpdateRequestDto>();
     }
 
     /// <summary>
@@ -28,8 +29,8 @@ public class ProfileSelectorUpdateRequestDto
     public bool AutoSelectSingleProfile { get; set; }
 
     /// <summary>
-    /// Gets or sets the desired selector members.
+    /// Gets the desired selector members.
     /// </summary>
     [Required]
-    public List<ProfileSelectorMemberUpdateRequestDto> Profiles { get; set; }
+    public ICollection<ProfileSelectorMemberUpdateRequestDto> Profiles { get; }
 }

@@ -1196,6 +1196,51 @@ namespace Jellyfin.Server.Implementations.Migrations
                     b.HasAnnotation("Sqlite:UseSqlReturningClause", false);
                 });
 
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSearchHistoryEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("DateCreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("HitCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("LastSearchedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProfileUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SearchTerm")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SearchTermNormalized")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "ProfileUserId", "LastSearchedUtc");
+
+                    b.HasIndex("OwnerUserId", "ProfileUserId", "SearchTermNormalized")
+                        .IsUnique();
+
+                    b.HasIndex("ProfileUserId");
+
+                    b.ToTable("ProfileSearchHistoryEntries");
+
+                    b.HasAnnotation("Sqlite:UseSqlReturningClause", false);
+                });
+
             modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.Security.ApiKey", b =>
                 {
                     b.Property<int>("Id")
@@ -1761,6 +1806,21 @@ namespace Jellyfin.Server.Implementations.Migrations
                     b.HasOne("Jellyfin.Database.Implementations.Entities.ProfileSelector", null)
                         .WithMany("Members")
                         .HasForeignKey("ProfileSelectorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Jellyfin.Database.Implementations.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ProfileUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSearchHistoryEntry", b =>
+                {
+                    b.HasOne("Jellyfin.Database.Implementations.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

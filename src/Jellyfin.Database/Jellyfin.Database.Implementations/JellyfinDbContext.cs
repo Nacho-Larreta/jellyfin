@@ -69,6 +69,11 @@ public class JellyfinDbContext(DbContextOptions<JellyfinDbContext> options, ILog
     public DbSet<ProfileSelectorDeviceState> ProfileSelectorDeviceStates => Set<ProfileSelectorDeviceState>();
 
     /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> containing profile search history entries.
+    /// </summary>
+    public DbSet<ProfileSearchHistoryEntry> ProfileSearchHistoryEntries => Set<ProfileSearchHistoryEntry>();
+
+    /// <summary>
     /// Gets the <see cref="DbSet{TEntity}"/> containing the image infos.
     /// </summary>
     public DbSet<ImageInfo> ImageInfos => Set<ImageInfo>();
