@@ -22,6 +22,7 @@ using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Extensions;
 using Jellyfin.Extensions.Json;
 using Jellyfin.Server.Implementations.Extensions;
+using Jellyfin.Server.Implementations.Search;
 using MediaBrowser.Common;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Channels;
@@ -1445,49 +1446,7 @@ public sealed class BaseItemRepository
     /// <param name="value">The value to clean.</param>
     /// <returns>The cleaned value.</returns>
     public static string GetCleanValue(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return value;
-        }
-
-        var noDiacritics = value.RemoveDiacritics();
-
-        // Build a string where any punctuation or symbol is treated as a separator (space).
-        var sb = new StringBuilder(noDiacritics.Length);
-        var previousWasSpace = false;
-        foreach (var ch in noDiacritics)
-        {
-            char outCh;
-            if (char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch))
-            {
-                outCh = ch;
-            }
-            else
-            {
-                outCh = ' ';
-            }
-
-            // normalize any whitespace character to a single ASCII space.
-            if (char.IsWhiteSpace(outCh))
-            {
-                if (!previousWasSpace)
-                {
-                    sb.Append(' ');
-                    previousWasSpace = true;
-                }
-            }
-            else
-            {
-                sb.Append(outCh);
-                previousWasSpace = false;
-            }
-        }
-
-        // trim leading/trailing spaces that may have been added.
-        var collapsed = sb.ToString().Trim();
-        return collapsed.ToLowerInvariant();
-    }
+        => SearchTermNormalizer.NormalizeForSearch(value);
 
     private List<(ItemValueType MagicNumber, string Value)> GetItemValuesToSave(BaseItemDto item, List<string> inheritedTags)
     {
@@ -1823,15 +1782,28 @@ public sealed class BaseItemRepository
         if (!string.IsNullOrEmpty(filter.SearchTerm))
         {
             var cleanedSearchTerm = GetCleanValue(filter.SearchTerm);
-            var originalSearchTerm = filter.SearchTerm.ToLower();
-            if (SearchWildcardTerms.Any(f => cleanedSearchTerm.Contains(f)))
+            var compactSearchTerm = SearchTermNormalizer.NormalizeForLookup(filter.SearchTerm);
+            if (cleanedSearchTerm.Length == 0)
             {
-                cleanedSearchTerm = $"%{cleanedSearchTerm.Trim('%')}%";
-                baseQuery = baseQuery.Where(e => EF.Functions.Like(e.CleanName!, cleanedSearchTerm) || (e.OriginalTitle != null && EF.Functions.Like(e.OriginalTitle.ToLower(), originalSearchTerm)));
+                baseQuery = baseQuery.Where(_ => false);
             }
             else
             {
-                baseQuery = baseQuery.Where(e => e.CleanName!.Contains(cleanedSearchTerm) || (e.OriginalTitle != null && e.OriginalTitle.ToLower().Contains(originalSearchTerm)));
+                var hasCompactSearchTerm = !string.IsNullOrEmpty(compactSearchTerm)
+                    && !string.Equals(cleanedSearchTerm, compactSearchTerm, StringComparison.Ordinal);
+                var originalSearchTerm = filter.SearchTerm.ToLower();
+                if (SearchWildcardTerms.Any(f => cleanedSearchTerm.Contains(f)))
+                {
+                    cleanedSearchTerm = $"%{cleanedSearchTerm.Trim('%')}%";
+                    baseQuery = baseQuery.Where(e => EF.Functions.Like(e.CleanName!, cleanedSearchTerm) || (e.OriginalTitle != null && EF.Functions.Like(e.OriginalTitle.ToLower(), originalSearchTerm)));
+                }
+                else
+                {
+                    baseQuery = baseQuery.Where(e =>
+                        e.CleanName!.Contains(cleanedSearchTerm)
+                        || (hasCompactSearchTerm && e.CleanName!.Replace(" ", string.Empty).Contains(compactSearchTerm))
+                        || (e.OriginalTitle != null && e.OriginalTitle.ToLower().Contains(originalSearchTerm)));
+                }
             }
         }
 

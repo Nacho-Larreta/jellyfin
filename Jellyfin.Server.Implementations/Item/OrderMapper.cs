@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations;
 using Jellyfin.Database.Implementations.Entities;
-using Jellyfin.Extensions;
+using Jellyfin.Server.Implementations.Search;
 using MediaBrowser.Controller.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -72,27 +72,22 @@ public static class OrderMapper
 
     /// <summary>
     /// Creates an expression to order search results by match quality.
-    /// Prioritizes: exact match (0) > prefix match with word boundary (1) > prefix match (2) > contains (3).
+    /// Prioritizes exact, separator-insensitive exact, prefix, separator-insensitive prefix, and contains matches.
     /// </summary>
     /// <param name="searchTerm">The search term to match against.</param>
     /// <returns>An expression that returns an integer representing match quality (lower is better).</returns>
     public static Expression<Func<BaseItemEntity, int>> MapSearchRelevanceOrder(string searchTerm)
     {
-        var cleanSearchTerm = GetCleanValue(searchTerm);
+        var cleanSearchTerm = SearchTermNormalizer.NormalizeForSearch(searchTerm);
+        var compactSearchTerm = SearchTermNormalizer.NormalizeForLookup(searchTerm);
         var searchPrefix = cleanSearchTerm + " ";
         return e =>
             e.CleanName == cleanSearchTerm ? 0 :
-            e.CleanName!.StartsWith(searchPrefix) ? 1 :
-            e.CleanName!.StartsWith(cleanSearchTerm) ? 2 : 3;
-    }
-
-    private static string GetCleanValue(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return value;
-        }
-
-        return value.RemoveDiacritics().ToLowerInvariant();
+            e.CleanName!.Replace(" ", string.Empty) == compactSearchTerm ? 1 :
+            e.CleanName!.StartsWith(searchPrefix) ? 2 :
+            e.CleanName!.StartsWith(cleanSearchTerm) ? 3 :
+            e.CleanName!.Replace(" ", string.Empty).StartsWith(compactSearchTerm) ? 4 :
+            e.CleanName!.Contains(cleanSearchTerm) ? 5 :
+            e.CleanName!.Replace(" ", string.Empty).Contains(compactSearchTerm) ? 6 : 7;
     }
 }

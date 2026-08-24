@@ -1,4 +1,6 @@
 ﻿using System;
+using Jellyfin.Database.Implementations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -6,6 +8,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Jellyfin.Server.Implementations.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(JellyfinDbContext))]
+    [Migration("20260503000000_AddProfileSearchHistory")]
     public partial class AddProfileSearchHistory : Migration
     {
         /// <inheritdoc />

@@ -253,5 +253,52 @@ namespace Jellyfin.Server.Integration.Tests.Controllers
             Assert.Contains(_childUserId, userIds!);
             Assert.DoesNotContain(_adminUserId, userIds!);
         }
+
+        [Fact]
+        [Priority(6)]
+        public async Task UpdateSelector_RequiresProfilesPropertyButAcceptsExplicitEmptyCollection()
+        {
+            var client = _factory.CreateClient();
+            client.DefaultRequestHeaders.AddAuthHeader(_adminAccessToken!);
+            var selectorUrl = $"Users/{_adminUserId.ToString("N", CultureInfo.InvariantCulture)}/ProfileSelector";
+
+            using var omittedResponse = await client.PutAsJsonAsync(
+                selectorUrl,
+                new
+                {
+                    IsEnabled = true,
+                    AutoSelectSingleProfile = false
+                },
+                _jsonOptions,
+                TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.BadRequest, omittedResponse.StatusCode);
+
+            using var nullResponse = await client.PutAsJsonAsync(
+                selectorUrl,
+                new
+                {
+                    IsEnabled = true,
+                    AutoSelectSingleProfile = false,
+                    Profiles = (object?)null
+                },
+                _jsonOptions,
+                TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.BadRequest, nullResponse.StatusCode);
+
+            using var emptyResponse = await client.PutAsJsonAsync(
+                selectorUrl,
+                new ProfileSelectorUpdateRequestDto
+                {
+                    IsEnabled = true,
+                    AutoSelectSingleProfile = false
+                },
+                _jsonOptions,
+                TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.OK, emptyResponse.StatusCode);
+
+            var selector = await emptyResponse.Content.ReadFromJsonAsync<ProfileSelectorDto>(_jsonOptions, TestContext.Current.CancellationToken);
+            var onlyProfile = Assert.Single(selector!.Profiles);
+            Assert.Equal(_adminUserId, onlyProfile.ProfileUserId);
+        }
     }
 }

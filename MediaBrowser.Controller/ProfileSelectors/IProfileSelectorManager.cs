@@ -32,6 +32,15 @@ namespace MediaBrowser.Controller.ProfileSelectors
         Task<ProfileSelectorDto?> GetSelectorForOwnerAsync(Guid ownerUserId, string deviceId, bool includeHiddenProfiles, CancellationToken cancellationToken);
 
         /// <summary>
+        /// Determines whether a user is a member of the selector owned by another user.
+        /// </summary>
+        /// <param name="ownerUserId">The selector owner user id.</param>
+        /// <param name="profileUserId">The candidate member user id.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns><see langword="true"/> when the owner/profile relationship exists.</returns>
+        Task<bool> IsProfileLinkedToOwnerAsync(Guid ownerUserId, Guid profileUserId, CancellationToken cancellationToken);
+
+        /// <summary>
         /// Gets user ids that are used as secondary profile backing users.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token.</param>

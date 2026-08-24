@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace Jellyfin.Api.Models.ProfileSelectorsDtos;
 
@@ -29,8 +30,9 @@ public class ProfileSelectorUpdateRequestDto
     public bool AutoSelectSingleProfile { get; set; }
 
     /// <summary>
-    /// Gets the desired selector members.
+    /// Gets or sets the desired selector members.
     /// </summary>
     [Required]
-    public ICollection<ProfileSelectorMemberUpdateRequestDto> Profiles { get; }
+    [JsonRequired]
+    public ICollection<ProfileSelectorMemberUpdateRequestDto> Profiles { get; set; }
 }

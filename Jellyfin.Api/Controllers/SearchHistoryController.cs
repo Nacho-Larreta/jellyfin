@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Jellyfin.Api.Constants;
 using Jellyfin.Api.Extensions;
 using MediaBrowser.Common.Api;
+using MediaBrowser.Controller.ProfileSelectors;
 using MediaBrowser.Controller.Search;
 using MediaBrowser.Model.Explore;
 using Microsoft.AspNetCore.Authorization;
@@ -21,10 +22,14 @@ namespace Jellyfin.Api.Controllers;
 public class SearchHistoryController : BaseJellyfinApiController
 {
     private readonly IProfileSearchHistoryManager _profileSearchHistoryManager;
+    private readonly IProfileSelectorManager _profileSelectorManager;
 
-    public SearchHistoryController(IProfileSearchHistoryManager profileSearchHistoryManager)
+    public SearchHistoryController(
+        IProfileSearchHistoryManager profileSearchHistoryManager,
+        IProfileSelectorManager profileSelectorManager)
     {
         _profileSearchHistoryManager = profileSearchHistoryManager;
+        _profileSelectorManager = profileSelectorManager;
     }
 
     [HttpGet]
@@ -36,7 +41,7 @@ public class SearchHistoryController : BaseJellyfinApiController
         [FromQuery] int limit = 10,
         CancellationToken cancellationToken = default)
     {
-        if (!CanAccessProfile(ownerUserId, profileUserId))
+        if (!await CanAccessProfileAsync(ownerUserId, profileUserId, cancellationToken).ConfigureAwait(false))
         {
             return Forbid();
         }
@@ -56,7 +61,7 @@ public class SearchHistoryController : BaseJellyfinApiController
         [FromBody] SearchHistoryUpdateRequestDto request,
         CancellationToken cancellationToken = default)
     {
-        if (!CanAccessProfile(ownerUserId, profileUserId))
+        if (!await CanAccessProfileAsync(ownerUserId, profileUserId, cancellationToken).ConfigureAwait(false))
         {
             return Forbid();
         }
@@ -66,9 +71,16 @@ public class SearchHistoryController : BaseJellyfinApiController
             return BadRequest("SearchTerm is required.");
         }
 
-        await _profileSearchHistoryManager.RecordSearchAsync(ownerUserId, profileUserId, request.SearchTerm, cancellationToken)
+        var result = await _profileSearchHistoryManager.RecordSearchAsync(ownerUserId, profileUserId, request.SearchTerm, cancellationToken)
             .ConfigureAwait(false);
-        return NoContent();
+        return result switch
+        {
+            SearchHistoryRecordResult.Recorded => NoContent(),
+            SearchHistoryRecordResult.EmptyTerm => BadRequest("SearchTerm must contain searchable characters."),
+            SearchHistoryRecordResult.RawTermTooLong => BadRequest($"SearchTerm must not exceed {SearchHistoryUpdateRequestDto.MaxSearchTermLength} characters."),
+            SearchHistoryRecordResult.TermTooLong => BadRequest("SearchTerm must not exceed 255 characters after whitespace normalization."),
+            _ => throw new InvalidOperationException($"Unsupported search history record result: {result}")
+        };
     }
 
     [HttpDelete]
@@ -79,7 +91,7 @@ public class SearchHistoryController : BaseJellyfinApiController
         [FromRoute] Guid profileUserId,
         CancellationToken cancellationToken = default)
     {
-        if (!CanAccessProfile(ownerUserId, profileUserId))
+        if (!await CanAccessProfileAsync(ownerUserId, profileUserId, cancellationToken).ConfigureAwait(false))
         {
             return Forbid();
         }
@@ -89,11 +101,10 @@ public class SearchHistoryController : BaseJellyfinApiController
         return NoContent();
     }
 
-    private bool CanAccessProfile(Guid ownerUserId, Guid profileUserId)
+    private async Task<bool> CanAccessProfileAsync(Guid ownerUserId, Guid profileUserId, CancellationToken cancellationToken)
     {
         var currentUserId = User.GetUserId();
-        return User.IsInRole(UserRoles.Administrator)
-            || currentUserId.Equals(ownerUserId)
-            || currentUserId.Equals(profileUserId);
+        return currentUserId.Equals(profileUserId)
+               && await _profileSelectorManager.IsProfileLinkedToOwnerAsync(ownerUserId, profileUserId, cancellationToken).ConfigureAwait(false);
     }
 }

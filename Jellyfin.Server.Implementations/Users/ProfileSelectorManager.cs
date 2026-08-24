@@ -90,6 +90,23 @@ namespace Jellyfin.Server.Implementations.Users
         }
 
         /// <inheritdoc />
+        public async Task<bool> IsProfileLinkedToOwnerAsync(Guid ownerUserId, Guid profileUserId, CancellationToken cancellationToken)
+        {
+            var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            await using var configuredContext = dbContext.ConfigureAwait(false);
+
+            return await dbContext.ProfileSelectorMembers
+                .AsNoTracking()
+                .AnyAsync(
+                    member => member.ProfileUserId.Equals(profileUserId)
+                              && dbContext.ProfileSelectors.Any(
+                                  selector => selector.Id.Equals(member.ProfileSelectorId)
+                                              && selector.OwnerUserId.Equals(ownerUserId)),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        /// <inheritdoc />
         public async Task<IReadOnlyList<Guid>> GetSecondaryProfileUserIdsAsync(CancellationToken cancellationToken)
         {
             var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);

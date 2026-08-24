@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Database.Implementations;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Search;
 using MediaBrowser.Model.Explore;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jellyfin.Server.Implementations.Search
@@ -15,9 +15,9 @@ namespace Jellyfin.Server.Implementations.Search
     /// <summary>
     /// Database-backed profile search history manager.
     /// </summary>
-    public sealed partial class ProfileSearchHistoryManager : IProfileSearchHistoryManager
+    public sealed class ProfileSearchHistoryManager : IProfileSearchHistoryManager
     {
-        private const int MaxTermLength = 255;
+        private const int SqliteUniqueConstraintError = 2067;
         private const int MaxHistoryLimit = 50;
         private readonly IDbContextFactory<JellyfinDbContext> _dbContextFactory;
 
@@ -53,48 +53,68 @@ namespace Jellyfin.Server.Implementations.Search
         }
 
         /// <inheritdoc />
-        public async Task RecordSearchAsync(Guid ownerUserId, Guid profileUserId, string searchTerm, CancellationToken cancellationToken)
+        public async Task<SearchHistoryRecordResult> RecordSearchAsync(Guid ownerUserId, Guid profileUserId, string searchTerm, CancellationToken cancellationToken)
         {
-            var displayTerm = NormalizeDisplayTerm(searchTerm);
-            if (displayTerm.Length == 0)
+            if (searchTerm.Length > SearchHistoryUpdateRequestDto.MaxSearchTermLength)
             {
-                return;
+                return SearchHistoryRecordResult.RawTermTooLong;
             }
 
-            var normalizedTerm = displayTerm.ToLowerInvariant();
+            var displayTerm = SearchTermNormalizer.NormalizeForDisplay(searchTerm);
+            var normalizedTerm = SearchTermNormalizer.NormalizeForLookup(displayTerm);
+            if (normalizedTerm.Length == 0)
+            {
+                return SearchHistoryRecordResult.EmptyTerm;
+            }
+
+            if (displayTerm.Length > SearchTermNormalizer.MaxHistoryTermLength)
+            {
+                return SearchHistoryRecordResult.TermTooLong;
+            }
+
             var now = DateTime.UtcNow;
 
             var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             await using var configuredContext = dbContext.ConfigureAwait(false);
-            var existing = await dbContext.ProfileSearchHistoryEntries
-                .FirstOrDefaultAsync(
-                    entry => entry.OwnerUserId.Equals(ownerUserId)
-                             && entry.ProfileUserId.Equals(profileUserId)
-                             && entry.SearchTermNormalized == normalizedTerm,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            if (existing is null)
+            if (await UpdateExistingEntryAsync(dbContext, ownerUserId, profileUserId, displayTerm, normalizedTerm, now, cancellationToken).ConfigureAwait(false) > 0)
             {
-                dbContext.ProfileSearchHistoryEntries.Add(new ProfileSearchHistoryEntry
+                return SearchHistoryRecordResult.Recorded;
+            }
+
+            var newEntry = new ProfileSearchHistoryEntry
+            {
+                OwnerUserId = ownerUserId,
+                ProfileUserId = profileUserId,
+                SearchTerm = displayTerm,
+                SearchTermNormalized = normalizedTerm,
+                HitCount = 1,
+                DateCreatedUtc = now,
+                LastSearchedUtc = now
+            };
+            dbContext.ProfileSearchHistoryEntries.Add(newEntry);
+
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
+            {
+                dbContext.Entry(newEntry).State = EntityState.Detached;
+                var updatedEntries = await UpdateExistingEntryAsync(
+                    dbContext,
+                    ownerUserId,
+                    profileUserId,
+                    displayTerm,
+                    normalizedTerm,
+                    now,
+                    cancellationToken).ConfigureAwait(false);
+                if (updatedEntries == 0)
                 {
-                    OwnerUserId = ownerUserId,
-                    ProfileUserId = profileUserId,
-                    SearchTerm = displayTerm,
-                    SearchTermNormalized = normalizedTerm,
-                    HitCount = 1,
-                    DateCreatedUtc = now,
-                    LastSearchedUtc = now
-                });
-            }
-            else
-            {
-                existing.SearchTerm = displayTerm;
-                existing.HitCount++;
-                existing.LastSearchedUtc = now;
+                    throw;
+                }
             }
 
-            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return SearchHistoryRecordResult.Recorded;
         }
 
         /// <inheritdoc />
@@ -108,18 +128,26 @@ namespace Jellyfin.Server.Implementations.Search
                 .ConfigureAwait(false);
         }
 
-        private static string NormalizeDisplayTerm(string searchTerm)
-        {
-            if (string.IsNullOrWhiteSpace(searchTerm))
-            {
-                return string.Empty;
-            }
+        private static Task<int> UpdateExistingEntryAsync(
+            JellyfinDbContext dbContext,
+            Guid ownerUserId,
+            Guid profileUserId,
+            string displayTerm,
+            string normalizedTerm,
+            DateTime now,
+            CancellationToken cancellationToken)
+            => dbContext.ProfileSearchHistoryEntries
+                .Where(entry => entry.OwnerUserId.Equals(ownerUserId)
+                                && entry.ProfileUserId.Equals(profileUserId)
+                                && entry.SearchTermNormalized == normalizedTerm)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(entry => entry.SearchTerm, displayTerm)
+                        .SetProperty(entry => entry.HitCount, entry => entry.HitCount + 1)
+                        .SetProperty(entry => entry.LastSearchedUtc, now),
+                    cancellationToken);
 
-            var normalized = WhitespaceRegex().Replace(searchTerm.Trim(), " ");
-            return normalized.Length <= MaxTermLength ? normalized : normalized[..MaxTermLength];
-        }
-
-        [GeneratedRegex(@"\s+")]
-        private static partial Regex WhitespaceRegex();
+        private static bool IsUniqueConstraintViolation(DbUpdateException exception)
+            => exception.InnerException is SqliteException { SqliteExtendedErrorCode: SqliteUniqueConstraintError };
     }
 }

@@ -1,7 +1,9 @@
 using System;
 using AutoFixture;
 using AutoFixture.AutoMoq;
+using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Server.Implementations.Item;
+using Jellyfin.Server.Implementations.Search;
 using MediaBrowser.Controller.Entities.TV;
 using Microsoft.Extensions.Configuration;
 using Moq;
@@ -65,6 +67,8 @@ namespace Jellyfin.Server.Implementations.Tests.Data
         [InlineData("Wall-E", "wall e")]
         [InlineData("No. 1: The Beginning", "no 1 the beginning")]
         [InlineData("Café-au-lait", "cafe au lait")]
+        [InlineData("Pokémon", "pokemon")]
+        [InlineData("Pokèmon", "pokemon")]
         public void CleanName_normalizes_various_punctuation(string title, string expectedClean)
         {
             var series = new Series
@@ -104,6 +108,51 @@ namespace Jellyfin.Server.Implementations.Tests.Data
             // Ensure a search term without punctuation would match
             var searchTerm = expectedClean;
             Assert.Contains(searchTerm, entity.CleanName ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Theory]
+        [InlineData("Spider-Man", "spiderman")]
+        [InlineData("Spider Man", "spiderman")]
+        [InlineData("Wall-E", "walle")]
+        [InlineData("Pokémon", "pokemon")]
+        [InlineData("Pokèmon", "pokemon")]
+        [InlineData("---", "")]
+        public void CompactName_removes_diacritics_and_separators(string title, string expectedCompact)
+        {
+            Assert.Equal(expectedCompact, SearchTermNormalizer.NormalizeForLookup(title));
+        }
+
+        [Theory]
+        [InlineData("", "")]
+        [InlineData("  ", "")]
+        [InlineData("---", "---")]
+        [InlineData("  Spider\t  Man  ", "Spider Man")]
+        public void DisplayName_collapses_whitespace_without_silent_truncation(string searchTerm, string expectedDisplay)
+        {
+            Assert.Equal(expectedDisplay, SearchTermNormalizer.NormalizeForDisplay(searchTerm));
+        }
+
+        [Theory]
+        [InlineData("spiderman", "spiderman", 0)]
+        [InlineData("spiderman", "spider man", 1)]
+        [InlineData("spider man", "spiderman", 1)]
+        [InlineData("pokèmon", "pokemon", 0)]
+        [InlineData("pokemon", "pokemon the movie", 2)]
+        [InlineData("walle", "wall e", 1)]
+        public void Search_relevance_prioritizes_normalized_and_separator_insensitive_matches(
+            string searchTerm,
+            string cleanName,
+            int expectedRank)
+        {
+            var rank = OrderMapper.MapSearchRelevanceOrder(searchTerm).Compile();
+            var entity = new BaseItemEntity
+            {
+                Id = Guid.NewGuid(),
+                Type = nameof(Series),
+                CleanName = cleanName
+            };
+
+            Assert.Equal(expectedRank, rank(entity));
         }
     }
 }
