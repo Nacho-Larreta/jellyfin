@@ -2224,6 +2224,8 @@ public sealed class BaseItemRepository
 
         if (filter.HasParentalRating ?? false)
         {
+            baseQuery = baseQuery.Where(e => e.InheritedParentalRatingValue != null);
+
             if (minParentalRatingFilter != null)
             {
                 baseQuery = baseQuery.Where(minParentalRatingFilter);
