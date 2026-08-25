@@ -72,6 +72,11 @@ namespace Jellyfin.Server.Implementations.Users
                 return null;
             }
 
+            if (ClearIneligibleRememberedProfile(selector, deviceId))
+            {
+                await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             return BuildDto(selector, currentUserId, deviceId, includeHiddenProfiles);
         }
 
@@ -84,9 +89,17 @@ namespace Jellyfin.Server.Implementations.Users
                 .FirstOrDefaultAsync(entity => entity.OwnerUserId.Equals(ownerUserId), cancellationToken)
                 .ConfigureAwait(false);
 
-            return selector is null
-                ? null
-                : BuildDto(selector, ownerUserId, deviceId, includeHiddenProfiles);
+            if (selector is null)
+            {
+                return null;
+            }
+
+            if (ClearIneligibleRememberedProfile(selector, deviceId))
+            {
+                await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return BuildDto(selector, ownerUserId, deviceId, includeHiddenProfiles);
         }
 
         /// <inheritdoc />
@@ -215,15 +228,25 @@ namespace Jellyfin.Server.Implementations.Users
                 throw new ProfileSelectorException((int)HttpStatusCode.Forbidden, "PROFILE_NOT_LINKED", "The requested profile does not belong to the current selector.");
             }
 
+            if (!selectorMember.IsVisible)
+            {
+                throw new ProfileSelectorException((int)HttpStatusCode.Forbidden, "PROFILE_NOT_VISIBLE", "The requested profile is not visible in the current selector.");
+            }
+
             var now = DateTime.UtcNow;
             if (selectorMember.PinLockoutUntilUtc.HasValue && selectorMember.PinLockoutUntilUtc.Value > now)
             {
                 throw new ProfileSelectorException(423, "PROFILE_PIN_LOCKED", "This profile is temporarily locked due to invalid PIN attempts.");
             }
 
+            if (!string.IsNullOrEmpty(context.Pin))
+            {
+                ValidatePin(context.Pin);
+            }
+
             if (!string.IsNullOrEmpty(selectorMember.PinHash))
             {
-                if (string.IsNullOrWhiteSpace(context.Pin))
+                if (string.IsNullOrEmpty(context.Pin))
                 {
                     throw new ProfileSelectorException((int)HttpStatusCode.Conflict, "PROFILE_PIN_REQUIRED", "This profile requires a PIN.");
                 }
@@ -455,6 +478,33 @@ namespace Jellyfin.Server.Implementations.Users
             return dto;
         }
 
+        private bool ClearIneligibleRememberedProfile(ProfileSelector selector, string deviceId)
+        {
+            var deviceState = selector.DeviceStates.FirstOrDefault(state => string.Equals(state.DeviceId, deviceId, StringComparison.Ordinal));
+            if (deviceState?.ActiveProfileUserId is null)
+            {
+                return false;
+            }
+
+            var member = selector.Members.FirstOrDefault(entity => entity.ProfileUserId.Equals(deviceState.ActiveProfileUserId.Value));
+            var user = member is null ? null : _userManager.GetUserById(member.ProfileUserId);
+            var isEligible = member?.IsVisible == true
+                             && user is not null
+                             && !user.HasPermission(Jellyfin.Database.Implementations.Enums.PermissionKind.IsDisabled)
+                             && user.IsParentalScheduleAllowed()
+                             && _deviceManager.CanAccessDevice(user, deviceId)
+                             && (!member.PinLockoutUntilUtc.HasValue || member.PinLockoutUntilUtc.Value <= DateTime.UtcNow);
+            if (isEligible)
+            {
+                return false;
+            }
+
+            deviceState.ActiveProfileUserId = null;
+            deviceState.LastActivatedUtc = null;
+            selector.DateModified = DateTime.UtcNow;
+            return true;
+        }
+
         private static bool HasParentalRestrictions(UserDto user)
             => user.Policy.MaxParentalRating.HasValue
                || user.Policy.MaxParentalSubRating.HasValue
@@ -465,7 +515,10 @@ namespace Jellyfin.Server.Implementations.Users
 
         private static void ValidatePin(string pin)
         {
-            if (string.IsNullOrWhiteSpace(pin) || pin.Length < MinPinLength || pin.Length > MaxPinLength || !pin.All(char.IsDigit))
+            if (string.IsNullOrEmpty(pin)
+                || pin.Length < MinPinLength
+                || pin.Length > MaxPinLength
+                || pin.Any(character => character is < '0' or > '9'))
             {
                 throw new ProfileSelectorException((int)HttpStatusCode.BadRequest, "PROFILE_PIN_INVALID_FORMAT", $"Profile PIN must be {MinPinLength}-{MaxPinLength} digits.");
             }
