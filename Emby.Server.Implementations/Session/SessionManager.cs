@@ -1713,7 +1713,10 @@ namespace Emby.Server.Implementations.Session
         {
             CheckDisposed();
 
-            _logger.LogInformation("Logging out access token {0}", device.AccessToken);
+            _logger.LogInformation(
+                "Logging out device {DeviceId} for user {UserId}",
+                device.DeviceId,
+                device.UserId);
 
             await _deviceManager.DeleteDevice(device).ConfigureAwait(false);
 

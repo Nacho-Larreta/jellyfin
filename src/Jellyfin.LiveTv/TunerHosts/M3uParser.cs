@@ -95,7 +95,7 @@ namespace Jellyfin.LiveTv.TunerHosts
                 {
                     if (!IsValidChannelUrl(trimmedLine))
                     {
-                        _logger.LogWarning("Skipping M3U channel entry with non-HTTP path: {Path}", trimmedLine);
+                        _logger.LogWarning("Skipping M3U channel entry with non-HTTP path");
                         extInf = string.Empty;
                         continue;
                     }

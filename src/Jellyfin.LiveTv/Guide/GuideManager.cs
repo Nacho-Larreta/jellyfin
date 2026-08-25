@@ -721,7 +721,7 @@ public class GuideManager : IGuideManager
         return false;
     }
 
-    private async Task PreCacheImages(IReadOnlyList<BaseItem> programs, DateTime maxCacheDate)
+    internal async Task PreCacheImages(IReadOnlyList<BaseItem> programs, DateTime maxCacheDate)
     {
         await Parallel.ForEachAsync(
             programs
@@ -740,7 +740,10 @@ public class GuideManager : IGuideManager
                     var imageInfo = program.ImageInfos[i];
                     if (!imageInfo.IsLocalFile)
                     {
-                        _logger.LogDebug("Caching image locally: {Url}", imageInfo.Path);
+                        _logger.LogDebug(
+                            "Caching {ImageType} image locally for program {ProgramId}",
+                            imageInfo.Type,
+                            program.Id);
                         try
                         {
                             program.ImageInfos[i] = await _libraryManager.ConvertImageToLocal(
@@ -752,7 +755,11 @@ public class GuideManager : IGuideManager
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogWarning(ex, "Unable to pre-cache {Url}", imageInfo.Path);
+                            _logger.LogWarning(
+                                ex,
+                                "Unable to pre-cache {ImageType} image for program {ProgramId}",
+                                imageInfo.Type,
+                                program.Id);
                         }
                     }
                 }

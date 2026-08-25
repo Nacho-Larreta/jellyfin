@@ -1,6 +1,8 @@
 using System;
 using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
+using Jellyfin.Database.Implementations.Entities.Security;
+using Jellyfin.Server.Implementations.Tests.Logging;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Devices;
@@ -18,6 +20,43 @@ namespace Jellyfin.Server.Implementations.Tests.SessionManager;
 
 public class SessionManagerTests
 {
+    [Fact]
+    public async Task Logout_LogsDeviceAndUserWithoutAccessToken()
+    {
+        const string AccessTokenMarker = "LOGOUT_ACCESS_TOKEN_MARKER";
+        var logger = new CapturingLogger<Emby.Server.Implementations.Session.SessionManager>();
+        var deviceManager = new Mock<IDeviceManager>();
+        deviceManager
+            .Setup(manager => manager.DeleteDevice(It.IsAny<Device>()))
+            .Returns(Task.CompletedTask);
+        await using var sessionManager = new Emby.Server.Implementations.Session.SessionManager(
+            logger,
+            Mock.Of<IEventManager>(),
+            Mock.Of<IUserDataManager>(),
+            Mock.Of<IServerConfigurationManager>(),
+            Mock.Of<ILibraryManager>(),
+            Mock.Of<IUserManager>(),
+            Mock.Of<IMusicManager>(),
+            Mock.Of<IDtoService>(),
+            Mock.Of<IImageProcessor>(),
+            Mock.Of<IServerApplicationHost>(),
+            deviceManager.Object,
+            Mock.Of<IMediaSourceManager>(),
+            Mock.Of<IHostApplicationLifetime>());
+        var userId = Guid.NewGuid();
+        var device = new Device(userId, "app", "1", "device", "device-id")
+        {
+            AccessToken = AccessTokenMarker
+        };
+
+        await sessionManager.Logout(device);
+
+        var message = Assert.Single(logger.Messages);
+        Assert.Contains("device-id", message, StringComparison.Ordinal);
+        Assert.Contains(userId.ToString(), message, StringComparison.Ordinal);
+        Assert.DoesNotContain(AccessTokenMarker, message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("", typeof(ArgumentException))]
     [InlineData(null, typeof(ArgumentNullException))]

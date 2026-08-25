@@ -164,7 +164,7 @@ namespace Emby.Server.Implementations.QuickConnect
             result.Authenticated = true;
             _currentRequests[code] = result;
 
-            _logger.LogDebug("Authorizing device with code {Code} to login as user {UserId}", code, userId);
+            _logger.LogDebug("Authorizing Quick Connect device to login as user {UserId}", userId);
 
             return true;
         }
@@ -206,11 +206,11 @@ namespace Emby.Server.Implementations.QuickConnect
                 if (expireAll || currentRequest.DateAdded < minTime)
                 {
                     var code = currentRequest.Code;
-                    _logger.LogDebug("Removing expired request {Code}", code);
+                    _logger.LogDebug("Removing expired Quick Connect request");
 
                     if (!_currentRequests.TryRemove(code, out _))
                     {
-                        _logger.LogWarning("Request {Code} already expired", code);
+                        _logger.LogWarning("Quick Connect request already expired");
                     }
                 }
             }
@@ -219,10 +219,10 @@ namespace Emby.Server.Implementations.QuickConnect
             {
                 if (expireAll || timestamp < minTime)
                 {
-                    _logger.LogDebug("Removing expired secret {Secret}", secret);
+                    _logger.LogDebug("Removing expired Quick Connect secret");
                     if (!_authorizedSecrets.TryRemove(secret, out _))
                     {
-                        _logger.LogWarning("Secret {Secret} already expired", secret);
+                        _logger.LogWarning("Quick Connect secret already expired");
                     }
                 }
             }

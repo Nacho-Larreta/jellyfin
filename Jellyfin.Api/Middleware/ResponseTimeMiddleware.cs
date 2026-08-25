@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Configuration;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Api.Middleware;
@@ -44,6 +43,7 @@ public class ResponseTimeMiddleware
 
         var enableWarning = serverConfigurationManager.Configuration.EnableSlowResponseWarning;
         var warningThreshold = serverConfigurationManager.Configuration.SlowResponseThresholdMs;
+        var requestPathBase = context.Request.PathBase;
         context.Response.OnStarting(() =>
         {
             var responseTime = Stopwatch.GetElapsedTime(startTimestamp);
@@ -51,8 +51,8 @@ public class ResponseTimeMiddleware
             if (enableWarning && responseTimeMs > warningThreshold && _logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug(
-                    "Slow HTTP Response from {Url} to {RemoteIP} in {Elapsed:g} with Status Code {StatusCode}",
-                    context.Request.GetDisplayUrl(),
+                    "Slow HTTP Response from {Request} to {RemoteIP} in {Elapsed:g} with Status Code {StatusCode}",
+                    RequestDisplaySanitizer.Sanitize(context.Request, requestPathBase),
                     context.GetNormalizedRemoteIP(),
                     responseTime,
                     context.Response.StatusCode);

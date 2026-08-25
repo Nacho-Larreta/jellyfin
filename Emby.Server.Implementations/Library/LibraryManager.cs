@@ -2991,7 +2991,10 @@ namespace Emby.Server.Implementations.Library
             {
                 try
                 {
-                    _logger.LogDebug("ConvertImageToLocal item {0} - image url: {1}", item.Id, url);
+                    _logger.LogDebug(
+                        "Converting {ImageType} image to local for item {ItemId}",
+                        image.Type,
+                        item.Id);
 
                     await ProviderManager.SaveImage(item, url, image.Type, imageIndex, CancellationToken.None).ConfigureAwait(false);
 
@@ -3004,7 +3007,11 @@ namespace Emby.Server.Implementations.Library
                     if (ex.StatusCode.HasValue
                         && (ex.StatusCode.Value == HttpStatusCode.NotFound || ex.StatusCode.Value == HttpStatusCode.Forbidden))
                     {
-                        _logger.LogDebug(ex, "Error downloading image {Url}", url);
+                        _logger.LogDebug(
+                            ex,
+                            "Error downloading {ImageType} image for item {ItemId}",
+                            image.Type,
+                            item.Id);
                         continue;
                     }
 

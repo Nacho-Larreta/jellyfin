@@ -57,8 +57,6 @@ namespace Jellyfin.LiveTv.Listings
 
         private async Task<string> GetXml(ListingsProviderInfo info, CancellationToken cancellationToken)
         {
-            _logger.LogInformation("xmltv path: {Path}", info.Path);
-
             string cacheFilename = info.Id + ".xml";
             string cacheDir = Path.Join(_config.ApplicationPaths.CachePath, "xmltv");
             string cacheFile = Path.Join(cacheDir, cacheFilename);
@@ -79,7 +77,7 @@ namespace Jellyfin.LiveTv.Listings
 
             if (info.Path.StartsWith("http", StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogInformation("Downloading xmltv listings from {Path}", info.Path);
+                _logger.LogInformation("Downloading XMLTV listings");
 
                 using var response = await _httpClientFactory.CreateClient(NamedClient.Default).GetAsync(info.Path, cancellationToken).ConfigureAwait(false);
                 var redirectedUrl = response.RequestMessage?.RequestUri?.ToString() ?? info.Path;
@@ -121,7 +119,7 @@ namespace Jellyfin.LiveTv.Listings
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error extracting from gz file {File}", originalUrl);
+                        _logger.LogError(ex, "Error extracting compressed XMLTV listing");
                     }
                 }
                 else

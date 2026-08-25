@@ -143,7 +143,7 @@ public class TunerHostManager : ITunerHostManager
 
             if (configuredDevice is not null && !string.Equals(device.Url, configuredDevice.Url, StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogInformation("Tuner url has changed from {PreviousUrl} to {NewUrl}", configuredDevice.Url, device.Url);
+                _logger.LogInformation("Tuner endpoint changed for device {DeviceId}", device.DeviceId);
 
                 configuredDevice.Url = device.Url;
                 await SaveTunerHost(configuredDevice).ConfigureAwait(false);
@@ -159,7 +159,7 @@ public class TunerHostManager : ITunerHostManager
 
             foreach (var device in discoveredDevices)
             {
-                _logger.LogInformation("Discovered tuner device {0} at {1}", host.Name, device.Url);
+                _logger.LogInformation("Discovered {TunerHost} device {DeviceId}", host.Name, device.DeviceId);
             }
 
             return discoveredDevices;

@@ -4,11 +4,13 @@ using System.Threading.Tasks;
 using AutoFixture;
 using AutoFixture.AutoMoq;
 using Emby.Server.Implementations.QuickConnect;
+using Jellyfin.Server.Implementations.Tests.Logging;
 using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Authentication;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Configuration;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -26,6 +28,7 @@ namespace Jellyfin.Server.Implementations.Tests.QuickConnect
 
         private readonly Fixture _fixture;
         private readonly ServerConfiguration _config;
+        private readonly CapturingLogger<QuickConnectManager> _logger;
         private readonly QuickConnectManager _quickConnectManager;
 
         public QuickConnectManagerTests()
@@ -39,6 +42,8 @@ namespace Jellyfin.Server.Implementations.Tests.QuickConnect
             {
                 ConfigureMembers = true
             }).Inject(configManager.Object);
+            _logger = new CapturingLogger<QuickConnectManager>();
+            _fixture.Inject<ILogger<QuickConnectManager>>(_logger);
 
             // User object contains circular references.
             _fixture.Behaviors.OfType<ThrowingRecursionBehavior>().ToList()
@@ -129,11 +134,18 @@ namespace Jellyfin.Server.Implementations.Tests.QuickConnect
         }
 
         [Fact]
-        public async Task AuthorizeRequest_QuickConnectAvailable_Success()
+        public async Task AuthorizeRequest_QuickConnectAvailable_LogsUserWithoutCodeOrSecret()
         {
             _config.QuickConnectAvailable = true;
-            var res = _quickConnectManager.TryConnect(_quickConnectAuthInfo);
-            Assert.True(await _quickConnectManager.AuthorizeRequest(Guid.Empty, res.Code));
+            var userId = Guid.NewGuid();
+            var request = _quickConnectManager.TryConnect(_quickConnectAuthInfo);
+
+            Assert.True(await _quickConnectManager.AuthorizeRequest(userId, request.Code));
+
+            var message = Assert.Single(_logger.Messages);
+            Assert.Contains(userId.ToString(), message, StringComparison.Ordinal);
+            Assert.DoesNotContain(request.Code, message, StringComparison.Ordinal);
+            Assert.DoesNotContain(request.Secret, message, StringComparison.Ordinal);
         }
     }
 }

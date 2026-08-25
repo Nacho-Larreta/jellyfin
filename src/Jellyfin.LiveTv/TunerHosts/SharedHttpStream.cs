@@ -52,7 +52,7 @@ namespace Jellyfin.LiveTv.TunerHosts
             Directory.CreateDirectory(Path.GetDirectoryName(TempFilePath) ?? throw new InvalidOperationException("Path can't be a root directory."));
 
             var typeName = GetType().Name;
-            Logger.LogInformation("Opening {StreamType} Live stream from {Url}", typeName, url);
+            Logger.LogInformation("Opening {StreamType} Live stream", typeName);
 
             // Response stream is disposed manually.
             var response = await _httpClientFactory.CreateClient(NamedClient.Default)

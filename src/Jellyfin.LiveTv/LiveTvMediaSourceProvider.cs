@@ -122,7 +122,7 @@ namespace Jellyfin.LiveTv
                 }
             }
 
-            _logger.LogDebug("MediaSources: {@MediaSources}", list);
+            _logger.LogDebug("Prepared {MediaSourceCount} Live TV media sources", list.Count);
 
             return list;
         }
