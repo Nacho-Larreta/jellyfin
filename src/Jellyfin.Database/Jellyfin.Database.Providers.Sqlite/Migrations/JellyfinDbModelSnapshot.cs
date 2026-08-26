@@ -1089,6 +1089,51 @@ namespace Jellyfin.Server.Implementations.Migrations
                     b.HasAnnotation("Sqlite:UseSqlReturningClause", false);
                 });
 
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSearchHistoryEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("DateCreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("HitCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("LastSearchedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProfileUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SearchTerm")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SearchTermNormalized")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProfileUserId");
+
+                    b.HasIndex("OwnerUserId", "ProfileUserId", "LastSearchedUtc");
+
+                    b.HasIndex("OwnerUserId", "ProfileUserId", "SearchTermNormalized")
+                        .IsUnique();
+
+                    b.ToTable("ProfileSearchHistoryEntries", (string)null);
+
+                    b.HasAnnotation("Sqlite:UseSqlReturningClause", false);
+                });
+
             modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelector", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1109,6 +1154,10 @@ namespace Jellyfin.Server.Implementations.Migrations
 
                     b.Property<Guid>("OwnerUserId")
                         .HasColumnType("TEXT");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -1139,6 +1188,10 @@ namespace Jellyfin.Server.Implementations.Migrations
 
                     b.Property<Guid>("ProfileSelectorId")
                         .HasColumnType("TEXT");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -1183,6 +1236,10 @@ namespace Jellyfin.Server.Implementations.Migrations
                     b.Property<Guid>("ProfileUserId")
                         .HasColumnType("TEXT");
 
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ProfileUserId")
@@ -1196,47 +1253,142 @@ namespace Jellyfin.Server.Implementations.Migrations
                     b.HasAnnotation("Sqlite:UseSqlReturningClause", false);
                 });
 
-            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSearchHistoryEntry", b =>
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelectorPlaybackStopReport", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                    b.Property<string>("ReportKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CallerUserId")
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("DateCreatedUtc")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("HitCount")
+                    b.Property<DateTime>("DateModifiedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PlaySessionId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("LastSearchedUtc")
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SwitchId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ReportKey");
+
+                    b.HasIndex("SwitchId");
+
+                    b.ToTable("ProfileSelectorPlaybackStopReports");
+
+                    b.HasAnnotation("Sqlite:UseSqlReturningClause", false);
+                });
+
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelectorSwitchOperation", b =>
+                {
+                    b.Property<Guid>("SwitchId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActiveDeviceId")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("AuthenticationDeviceRecordId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CallerCredentialRecordId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("CallerUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Client")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("DateCreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("DateModifiedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeviceName")
+                        .IsRequired()
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("OwnerUserId")
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("ProfileUserId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SearchTerm")
-                        .IsRequired()
+                    b.Property<string>("PinProofHash")
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("SearchTermNormalized")
-                        .IsRequired()
-                        .HasMaxLength(255)
+                    b.Property<DateTime>("PreparedExpiresUtc")
                         .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                    b.Property<Guid>("ProfileSelectorId")
+                        .HasColumnType("TEXT");
 
-                    b.HasIndex("OwnerUserId", "ProfileUserId", "LastSearchedUtc");
+                    b.Property<string>("RemoteEndPoint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
 
-                    b.HasIndex("OwnerUserId", "ProfileUserId", "SearchTermNormalized")
-                        .IsUnique();
+                    b.Property<DateTime>("RetainUntilUtc")
+                        .HasColumnType("TEXT");
 
-                    b.HasIndex("ProfileUserId");
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
-                    b.ToTable("ProfileSearchHistoryEntries");
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TargetProfileUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("SwitchId");
+
+                    b.HasIndex("RetainUntilUtc");
+
+                    b.HasIndex("ProfileSelectorId", "ActiveDeviceId")
+                        .IsUnique()
+                        .HasFilter("ActiveDeviceId IS NOT NULL");
+
+                    b.HasIndex("CallerUserId", "DeviceId", "RetainUntilUtc");
+
+                    b.ToTable("ProfileSelectorSwitchOperations");
 
                     b.HasAnnotation("Sqlite:UseSqlReturningClause", false);
                 });
@@ -1314,12 +1466,19 @@ namespace Jellyfin.Server.Implementations.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("ProfileSwitchId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("DeviceId");
+
+                    b.HasIndex("ProfileSwitchId")
+                        .IsUnique()
+                        .HasFilter("ProfileSwitchId IS NOT NULL");
 
                     b.HasIndex("AccessToken", "DateLastActivity");
 
@@ -1778,6 +1937,21 @@ namespace Jellyfin.Server.Implementations.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSearchHistoryEntry", b =>
+                {
+                    b.HasOne("Jellyfin.Database.Implementations.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Jellyfin.Database.Implementations.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ProfileUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelector", b =>
                 {
                     b.HasOne("Jellyfin.Database.Implementations.Entities.User", null)
@@ -1816,17 +1990,20 @@ namespace Jellyfin.Server.Implementations.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSearchHistoryEntry", b =>
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelectorPlaybackStopReport", b =>
                 {
-                    b.HasOne("Jellyfin.Database.Implementations.Entities.User", null)
+                    b.HasOne("Jellyfin.Database.Implementations.Entities.ProfileSelectorSwitchOperation", null)
                         .WithMany()
-                        .HasForeignKey("OwnerUserId")
+                        .HasForeignKey("SwitchId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
 
-                    b.HasOne("Jellyfin.Database.Implementations.Entities.User", null)
+            modelBuilder.Entity("Jellyfin.Database.Implementations.Entities.ProfileSelectorSwitchOperation", b =>
+                {
+                    b.HasOne("Jellyfin.Database.Implementations.Entities.ProfileSelector", null)
                         .WithMany()
-                        .HasForeignKey("ProfileUserId")
+                        .HasForeignKey("ProfileSelectorId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

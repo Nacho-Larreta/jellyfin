@@ -17,10 +17,17 @@ internal sealed class ProfileSelectorApiTestContext
 {
     private readonly JellyfinApplicationFactory _factory;
 
-    private ProfileSelectorApiTestContext(JellyfinApplicationFactory factory, HttpClient ownerClient, Guid ownerId, string ownerName, Guid profileId)
+    private ProfileSelectorApiTestContext(
+        JellyfinApplicationFactory factory,
+        HttpClient ownerClient,
+        string ownerAccessToken,
+        Guid ownerId,
+        string ownerName,
+        Guid profileId)
     {
         _factory = factory;
         OwnerClient = ownerClient;
+        OwnerAccessToken = ownerAccessToken;
         OwnerId = ownerId;
         OwnerName = ownerName;
         ProfileId = profileId;
@@ -29,6 +36,8 @@ internal sealed class ProfileSelectorApiTestContext
     public JsonSerializerOptions JsonOptions { get; } = JsonDefaults.Options;
 
     public HttpClient OwnerClient { get; }
+
+    public string OwnerAccessToken { get; }
 
     public Guid OwnerId { get; }
 
@@ -43,7 +52,8 @@ internal sealed class ProfileSelectorApiTestContext
     public static async Task<ProfileSelectorApiTestContext> CreateAsync(JellyfinApplicationFactory factory)
     {
         var client = factory.CreateClient();
-        client.DefaultRequestHeaders.AddAuthHeader(await AuthHelper.CompleteStartupAsync(client));
+        var ownerAccessToken = await AuthHelper.CompleteStartupAsync(client);
+        client.DefaultRequestHeaders.AddAuthHeader(ownerAccessToken);
         var owner = await AuthHelper.GetUserDtoAsync(client);
 
         using var createUserResponse = await client.PostAsJsonAsync(
@@ -55,7 +65,7 @@ internal sealed class ProfileSelectorApiTestContext
         var profile = await createUserResponse.Content.ReadFromJsonAsync<UserDto>(JsonDefaults.Options, TestContext.Current.CancellationToken);
         Assert.NotNull(profile);
 
-        var context = new ProfileSelectorApiTestContext(factory, client, owner.Id, owner.Name, profile.Id);
+        var context = new ProfileSelectorApiTestContext(factory, client, ownerAccessToken, owner.Id, owner.Name, profile.Id);
         await context.ConfigureAsync(isEnabled: true, isVisible: true, includeProfile: true);
         return context;
     }

@@ -199,9 +199,7 @@ public sealed class TranscodeManager : ITranscodeManager, IDisposable
         {
             // This is really only needed for HLS.
             // Progressive streams can stop on their own reliably.
-            jobs.AddRange(_activeTranscodingJobs.Where(j => string.IsNullOrWhiteSpace(playSessionId)
-                ? string.Equals(deviceId, j.DeviceId, StringComparison.OrdinalIgnoreCase)
-                : string.Equals(playSessionId, j.PlaySessionId, StringComparison.OrdinalIgnoreCase)));
+            jobs.AddRange(_activeTranscodingJobs.Where(job => MatchesKillRequest(job, deviceId, playSessionId)));
         }
 
         return Task.WhenAll(GetKillJobs());
@@ -214,6 +212,11 @@ public sealed class TranscodeManager : ITranscodeManager, IDisposable
             }
         }
     }
+
+    internal static bool MatchesKillRequest(TranscodingJob job, string deviceId, string? playSessionId)
+        => string.Equals(deviceId, job.DeviceId, StringComparison.OrdinalIgnoreCase)
+           && (string.IsNullOrWhiteSpace(playSessionId)
+               || string.Equals(playSessionId, job.PlaySessionId, StringComparison.OrdinalIgnoreCase));
 
     private async Task KillTranscodingJob(TranscodingJob job, bool closeLiveStream, Func<string, bool> delete)
     {

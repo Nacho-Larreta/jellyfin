@@ -1,13 +1,14 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Jellyfin.Database.Implementations.Interfaces;
 
 namespace Jellyfin.Database.Implementations.Entities
 {
     /// <summary>
     /// Represents one real Jellyfin user exposed inside a selector.
     /// </summary>
-    public class ProfileSelectorMember
+    public class ProfileSelectorMember : IHasConcurrencyToken
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="ProfileSelectorMember"/> class.
@@ -70,5 +71,15 @@ namespace Jellyfin.Database.Implementations.Entities
         /// Gets or sets the last PIN failure date.
         /// </summary>
         public DateTime? LastFailedPinAttemptUtc { get; set; }
+
+        /// <inheritdoc />
+        [ConcurrencyCheck]
+        public uint RowVersion { get; private set; }
+
+        /// <inheritdoc />
+        public void OnSavingChanges()
+        {
+            RowVersion++;
+        }
     }
 }

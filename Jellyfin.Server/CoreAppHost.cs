@@ -16,6 +16,7 @@ using Jellyfin.Server.Implementations.Search;
 using Jellyfin.Server.Implementations.Security;
 using Jellyfin.Server.Implementations.Trickplay;
 using Jellyfin.Server.Implementations.Users;
+using Jellyfin.Server.Implementations.Users.Persistence;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Authentication;
 using MediaBrowser.Controller.BaseItemManager;
@@ -42,6 +43,8 @@ namespace Jellyfin.Server
     /// </summary>
     public class CoreAppHost : ApplicationHost
     {
+        private readonly IConfiguration _startupConfig;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="CoreAppHost" /> class.
         /// </summary>
@@ -60,6 +63,7 @@ namespace Jellyfin.Server
                 options,
                 startupConfig)
         {
+            _startupConfig = startupConfig;
         }
 
         /// <inheritdoc/>
@@ -89,6 +93,13 @@ namespace Jellyfin.Server
             serviceCollection.AddSingleton<IPasswordResetProvider, DefaultPasswordResetProvider>();
             serviceCollection.AddSingleton<IDisplayPreferencesManager, DisplayPreferencesManager>();
             serviceCollection.AddSingleton<IProfileSelectorManager, ProfileSelectorManager>();
+            var profileSwitchOptions = new ProfileSwitchOptions();
+            _startupConfig.GetSection(ProfileSwitchOptions.SectionName).Bind(profileSwitchOptions);
+            profileSwitchOptions.Validate();
+            serviceCollection.AddSingleton(profileSwitchOptions);
+            serviceCollection.AddSingleton(TimeProvider.System);
+            serviceCollection.AddSingleton<IProfileSwitchStore, EfProfileSwitchStore>();
+            serviceCollection.AddSingleton<IProfileSwitchCoordinator, ProfileSwitchCoordinator>();
             serviceCollection.AddSingleton<IProfileSearchHistoryManager, ProfileSearchHistoryManager>();
             serviceCollection.AddSingleton<IDeviceManager, DeviceManager>();
             serviceCollection.AddSingleton<ITrickplayManager, TrickplayManager>();

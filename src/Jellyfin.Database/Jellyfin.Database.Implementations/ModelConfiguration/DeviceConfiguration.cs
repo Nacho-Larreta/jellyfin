@@ -23,6 +23,11 @@ namespace Jellyfin.Database.Implementations.ModelConfiguration
 
             builder
                 .HasIndex(entity => entity.DeviceId);
+
+            builder
+                .HasIndex(entity => entity.ProfileSwitchId)
+                .IsUnique()
+                .HasFilter("ProfileSwitchId IS NOT NULL");
         }
     }
 }

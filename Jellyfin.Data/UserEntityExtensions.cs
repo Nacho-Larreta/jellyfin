@@ -147,8 +147,19 @@ public static class UserEntityExtensions
     /// <returns><c>True</c> if the current time is within an access schedule, or there are no access schedules.</returns>
     public static bool IsParentalScheduleAllowed(this User entity)
     {
+        return entity.IsParentalScheduleAllowed(DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Checks whether this user is allowed to use the server at a deterministic UTC instant.
+    /// </summary>
+    /// <param name="entity">The user to check.</param>
+    /// <param name="utcNow">The UTC instant used to evaluate access schedules.</param>
+    /// <returns><c>True</c> if the instant is within an access schedule, or there are no access schedules.</returns>
+    public static bool IsParentalScheduleAllowed(this User entity, DateTime utcNow)
+    {
         return entity.AccessSchedules.Count == 0
-               || entity.AccessSchedules.Any(i => IsParentalScheduleAllowed(i, DateTime.UtcNow));
+               || entity.AccessSchedules.Any(i => IsParentalScheduleAllowed(i, utcNow));
     }
 
     /// <summary>

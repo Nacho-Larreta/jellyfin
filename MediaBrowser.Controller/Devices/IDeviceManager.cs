@@ -30,6 +30,19 @@ public interface IDeviceManager
     Task<Device> CreateDevice(Device device);
 
     /// <summary>
+    /// Registers a device that was already persisted by an atomic external transaction.
+    /// </summary>
+    /// <param name="device">The committed persisted device.</param>
+    void RegisterDevice(Device device);
+
+    /// <summary>
+    /// Reloads one persisted credential and idempotently reconciles it into the runtime cache.
+    /// </summary>
+    /// <param name="authenticationDeviceId">The authentication-device database identifier.</param>
+    /// <returns>The persisted credential, or <see langword="null"/> when it no longer exists.</returns>
+    Task<Device?> ReconcileDevice(int authenticationDeviceId);
+
+    /// <summary>
     /// Saves the capabilities.
     /// </summary>
     /// <param name="deviceId">The device id.</param>

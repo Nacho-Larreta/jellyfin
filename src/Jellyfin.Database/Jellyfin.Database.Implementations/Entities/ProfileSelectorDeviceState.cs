@@ -1,13 +1,14 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Jellyfin.Database.Implementations.Interfaces;
 
 namespace Jellyfin.Database.Implementations.Entities
 {
     /// <summary>
     /// Stores the last selected profile for one selector/device pair.
     /// </summary>
-    public class ProfileSelectorDeviceState
+    public class ProfileSelectorDeviceState : IHasConcurrencyToken
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="ProfileSelectorDeviceState"/> class.
@@ -49,5 +50,15 @@ namespace Jellyfin.Database.Implementations.Entities
         /// Gets or sets the last activation date.
         /// </summary>
         public DateTime? LastActivatedUtc { get; set; }
+
+        /// <inheritdoc />
+        [ConcurrencyCheck]
+        public uint RowVersion { get; private set; }
+
+        /// <inheritdoc />
+        public void OnSavingChanges()
+        {
+            RowVersion++;
+        }
     }
 }

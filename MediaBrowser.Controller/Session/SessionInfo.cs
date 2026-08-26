@@ -150,6 +150,12 @@ namespace MediaBrowser.Controller.Session
         public BaseItemDto NowPlayingItem { get; set; }
 
         /// <summary>
+        /// Gets or sets the server-observed play-session identity for the active item.
+        /// </summary>
+        [JsonIgnore]
+        public string PlaySessionId { get; set; }
+
+        /// <summary>
         /// Gets or sets the now playing queue full items.
         /// </summary>
         /// <value>The now playing queue full items.</value>

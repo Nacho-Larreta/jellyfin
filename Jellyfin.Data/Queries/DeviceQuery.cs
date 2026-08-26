@@ -21,5 +21,10 @@ namespace Jellyfin.Data.Queries
         /// Gets or sets the access token.
         /// </summary>
         public string? AccessToken { get; set; }
+
+        /// <summary>
+        /// Gets or sets the durable profile switch identifier that created the device token.
+        /// </summary>
+        public Guid? ProfileSwitchId { get; set; }
     }
 }

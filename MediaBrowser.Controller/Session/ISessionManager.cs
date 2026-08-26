@@ -266,6 +266,50 @@ namespace MediaBrowser.Controller.Session
         Task<AuthenticationResult> AuthenticateDirect(AuthenticationRequest request);
 
         /// <summary>
+        /// Creates an unpersisted target credential without changing the active runtime session.
+        /// </summary>
+        /// <param name="request">The target authentication request.</param>
+        /// <param name="switchId">The durable switch identifier used to recover or compensate the credential.</param>
+        /// <returns>The unpersisted target credential and its user-session admission reservation.</returns>
+        Task<IProfileSwitchCredentialReservation> CreateProfileSwitchCredential(AuthenticationRequest request, Guid switchId);
+
+        /// <summary>
+        /// Performs a serialized preflight of the profile-switch session-limit policy.
+        /// </summary>
+        /// <param name="user">The target user.</param>
+        /// <param name="deviceId">The canonical target device identifier.</param>
+        /// <returns>A task representing the preflight.</returns>
+        Task ValidateProfileSwitchSessionPolicyAsync(User user, string deviceId);
+
+        /// <summary>
+        /// Atomically compares and stops the exact old playback owned by a profile switch.
+        /// </summary>
+        /// <param name="request">The canonical session identity and captured playback claim.</param>
+        /// <returns>The classified compare-and-stop outcome.</returns>
+        Task<ProfileSwitchSessionStopResult> StopProfileSwitchPlaybackAsync(ProfileSwitchSessionStopRequest request);
+
+        /// <summary>
+        /// Registers a profile-switch credential after its database transaction commits.
+        /// </summary>
+        /// <param name="device">The committed credential.</param>
+        void RegisterCommittedProfileSwitchCredential(Device device);
+
+        /// <summary>
+        /// Revokes one profile-switch runtime credential without ending unrelated recovery or profile sessions on the same device.
+        /// </summary>
+        /// <param name="device">The profile-switch credential to revoke.</param>
+        /// <returns>A task representing the revocation.</returns>
+        Task RevokeProfileSwitchCredential(Device device);
+
+        /// <summary>
+        /// Revokes a superseded credential only when its profile-switch replacement exists.
+        /// </summary>
+        /// <param name="device">The superseded credential.</param>
+        /// <param name="replacementSwitchId">The replacement switch identifier.</param>
+        /// <returns>A task representing the revocation.</returns>
+        Task RevokeSupersededProfileCredential(Device device, Guid replacementSwitchId);
+
+        /// <summary>
         /// Reports the capabilities.
         /// </summary>
         /// <param name="sessionId">The session identifier.</param>

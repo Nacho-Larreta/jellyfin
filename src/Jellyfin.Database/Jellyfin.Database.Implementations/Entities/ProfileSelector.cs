@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using Jellyfin.Database.Implementations.Interfaces;
 
 namespace Jellyfin.Database.Implementations.Entities
 {
     /// <summary>
     /// Represents a household-level profile selector owned by one Jellyfin user.
     /// </summary>
-    public class ProfileSelector
+    public class ProfileSelector : IHasConcurrencyToken
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="ProfileSelector"/> class.
@@ -56,6 +57,10 @@ namespace Jellyfin.Database.Implementations.Entities
         /// </summary>
         public DateTime DateModified { get; set; }
 
+        /// <inheritdoc />
+        [ConcurrencyCheck]
+        public uint RowVersion { get; private set; }
+
         /// <summary>
         /// Gets the selector members.
         /// </summary>
@@ -65,5 +70,11 @@ namespace Jellyfin.Database.Implementations.Entities
         /// Gets the per-device restore states.
         /// </summary>
         public virtual ICollection<ProfileSelectorDeviceState> DeviceStates { get; private set; }
+
+        /// <inheritdoc />
+        public void OnSavingChanges()
+        {
+            RowVersion++;
+        }
     }
 }

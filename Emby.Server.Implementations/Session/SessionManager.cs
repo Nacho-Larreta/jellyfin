@@ -67,6 +67,8 @@ namespace Emby.Server.Implementations.Session
         private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _activeLiveStreamSessions
             = new(StringComparer.OrdinalIgnoreCase);
 
+        private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _sessionAdmissionLocks = new();
+
         private Timer _idleTimer;
         private Timer _inactiveTimer;
 
@@ -423,47 +425,52 @@ namespace Emby.Server.Implementations.Session
                 }
             }
 
-            session.NowPlayingItem = info.Item;
-            session.LastActivityDate = DateTime.UtcNow;
-
-            if (updateLastCheckInTime)
+            lock (session)
             {
-                session.LastPlaybackCheckIn = DateTime.UtcNow;
-            }
+                session.NowPlayingItem = info.Item;
+                session.FullNowPlayingItem = libraryItem;
+                session.PlaySessionId = info.PlaySessionId;
+                session.LastActivityDate = DateTime.UtcNow;
 
-            if (info.IsPaused && session.LastPausedDate is null)
-            {
-                session.LastPausedDate = DateTime.UtcNow;
-            }
-            else if (!info.IsPaused)
-            {
-                session.LastPausedDate = null;
-            }
+                if (updateLastCheckInTime)
+                {
+                    session.LastPlaybackCheckIn = DateTime.UtcNow;
+                }
 
-            session.PlayState.IsPaused = info.IsPaused;
-            session.PlayState.PositionTicks = info.PositionTicks;
-            session.PlayState.MediaSourceId = info.MediaSourceId;
-            session.PlayState.LiveStreamId = info.LiveStreamId;
-            session.PlayState.CanSeek = info.CanSeek;
-            session.PlayState.IsMuted = info.IsMuted;
-            session.PlayState.VolumeLevel = info.VolumeLevel;
-            session.PlayState.AudioStreamIndex = info.AudioStreamIndex;
-            session.PlayState.SubtitleStreamIndex = info.SubtitleStreamIndex;
-            session.PlayState.PlayMethod = info.PlayMethod;
-            session.PlayState.RepeatMode = info.RepeatMode;
-            session.PlayState.PlaybackOrder = info.PlaybackOrder;
-            session.PlaylistItemId = info.PlaylistItemId;
+                if (info.IsPaused && session.LastPausedDate is null)
+                {
+                    session.LastPausedDate = DateTime.UtcNow;
+                }
+                else if (!info.IsPaused)
+                {
+                    session.LastPausedDate = null;
+                }
 
-            var nowPlayingQueue = info.NowPlayingQueue;
+                session.PlayState.IsPaused = info.IsPaused;
+                session.PlayState.PositionTicks = info.PositionTicks;
+                session.PlayState.MediaSourceId = info.MediaSourceId;
+                session.PlayState.LiveStreamId = info.LiveStreamId;
+                session.PlayState.CanSeek = info.CanSeek;
+                session.PlayState.IsMuted = info.IsMuted;
+                session.PlayState.VolumeLevel = info.VolumeLevel;
+                session.PlayState.AudioStreamIndex = info.AudioStreamIndex;
+                session.PlayState.SubtitleStreamIndex = info.SubtitleStreamIndex;
+                session.PlayState.PlayMethod = info.PlayMethod;
+                session.PlayState.RepeatMode = info.RepeatMode;
+                session.PlayState.PlaybackOrder = info.PlaybackOrder;
+                session.PlaylistItemId = info.PlaylistItemId;
 
-            if (nowPlayingQueue?.Length > 0 && !nowPlayingQueue.SequenceEqual(session.NowPlayingQueue))
-            {
-                session.NowPlayingQueue = nowPlayingQueue;
+                var nowPlayingQueue = info.NowPlayingQueue;
 
-                var itemIds = Array.ConvertAll(nowPlayingQueue, queue => queue.Id);
-                session.NowPlayingQueueFullItems = _dtoService.GetBaseItemDtos(
-                    _libraryManager.GetItemList(new InternalItemsQuery { ItemIds = itemIds }),
-                    new DtoOptions(true));
+                if (nowPlayingQueue?.Length > 0 && !nowPlayingQueue.SequenceEqual(session.NowPlayingQueue))
+                {
+                    session.NowPlayingQueue = nowPlayingQueue;
+
+                    var itemIds = Array.ConvertAll(nowPlayingQueue, queue => queue.Id);
+                    session.NowPlayingQueueFullItems = _dtoService.GetBaseItemDtos(
+                        _libraryManager.GetItemList(new InternalItemsQuery { ItemIds = itemIds }),
+                        new DtoOptions(true));
+                }
             }
         }
 
@@ -475,6 +482,7 @@ namespace Emby.Server.Implementations.Session
         {
             session.NowPlayingItem = null;
             session.FullNowPlayingItem = null;
+            session.PlaySessionId = null;
             session.PlayState = new PlayerStateInfo();
 
             if (!string.IsNullOrEmpty(session.DeviceId))
@@ -753,7 +761,7 @@ namespace Emby.Server.Implementations.Session
 
             var libraryItem = info.ItemId.IsEmpty()
                 ? null
-                : GetNowPlayingItem(session, info.ItemId);
+                : _libraryManager.GetItemById(info.ItemId);
 
             await UpdateNowPlayingItem(session, info, libraryItem, true).ConfigureAwait(false);
 
@@ -888,7 +896,7 @@ namespace Emby.Server.Implementations.Session
 
             var libraryItem = info.ItemId.IsEmpty()
                 ? null
-                : GetNowPlayingItem(session, info.ItemId);
+                : _libraryManager.GetItemById(info.ItemId);
 
             await UpdateNowPlayingItem(session, info, libraryItem, !isAutomated).ConfigureAwait(false);
 
@@ -1006,6 +1014,141 @@ namespace Emby.Server.Implementations.Session
             }
 
             return changed;
+        }
+
+        /// <summary>
+        /// Atomically compares and stops the exact old playback owned by a profile switch.
+        /// </summary>
+        /// <param name="request">The canonical session identity and captured playback claim.</param>
+        /// <returns>The classified compare-and-stop outcome.</returns>
+        public async Task<ProfileSwitchSessionStopResult> StopProfileSwitchPlaybackAsync(
+            ProfileSwitchSessionStopRequest request)
+        {
+            CheckDisposed();
+            ArgumentNullException.ThrowIfNull(request);
+            ArgumentException.ThrowIfNullOrEmpty(request.DeviceId);
+            ArgumentException.ThrowIfNullOrEmpty(request.Client);
+            ArgumentException.ThrowIfNullOrEmpty(request.PlaySessionId);
+            if (request.UserId.IsEmpty() || request.ItemId.IsEmpty() || request.PositionTicks < 0)
+            {
+                throw new ArgumentException("A user, item and non-negative playback position are required.", nameof(request));
+            }
+
+            var session = GetSession(request.DeviceId, request.Client, string.Empty);
+            if (session is null)
+            {
+                return new ProfileSwitchSessionStopResult
+                {
+                    Outcome = ProfileSwitchSessionStopOutcome.NotActive
+                };
+            }
+
+            PlaybackStopInfo stopInfo;
+            BaseItem libraryItem;
+            List<User> users;
+            lock (session)
+            {
+                if (!session.UserId.Equals(request.UserId)
+                    || !string.Equals(session.DeviceId, request.DeviceId, StringComparison.Ordinal)
+                    || !string.Equals(session.Client, request.Client, StringComparison.Ordinal))
+                {
+                    return new ProfileSwitchSessionStopResult
+                    {
+                        Outcome = ProfileSwitchSessionStopOutcome.SessionMismatch
+                    };
+                }
+
+                if (session.NowPlayingItem is null)
+                {
+                    return new ProfileSwitchSessionStopResult
+                    {
+                        Outcome = ProfileSwitchSessionStopOutcome.NotActive
+                    };
+                }
+
+                if (!session.NowPlayingItem.Id.Equals(request.ItemId)
+                    || !string.Equals(session.PlaySessionId, request.PlaySessionId, StringComparison.Ordinal))
+                {
+                    return new ProfileSwitchSessionStopResult
+                    {
+                        Outcome = ProfileSwitchSessionStopOutcome.PlaybackMismatch
+                    };
+                }
+
+                session.StopAutomaticProgress();
+                libraryItem = GetNowPlayingItem(session, request.ItemId);
+                users = GetUsers(session);
+                stopInfo = new PlaybackStopInfo
+                {
+                    Item = session.NowPlayingItem,
+                    ItemId = session.NowPlayingItem.Id,
+                    SessionId = session.Id,
+                    MediaSourceId = session.PlayState.MediaSourceId,
+                    PositionTicks = request.PositionTicks,
+                    LiveStreamId = session.PlayState.LiveStreamId,
+                    PlaySessionId = session.PlaySessionId,
+                    Failed = request.Failed,
+                    NextMediaType = request.NextMediaType,
+                    PlaylistItemId = session.PlaylistItemId,
+                    NowPlayingQueue = session.NowPlayingQueue.ToArray()
+                };
+                RemoveNowPlayingItem(session);
+            }
+
+            await CompleteProfileSwitchPlaybackStopAsync(session, stopInfo, libraryItem, users).ConfigureAwait(false);
+            return new ProfileSwitchSessionStopResult
+            {
+                Outcome = ProfileSwitchSessionStopOutcome.Stopped,
+                PlaySessionId = stopInfo.PlaySessionId
+            };
+        }
+
+        private async Task CompleteProfileSwitchPlaybackStopAsync(
+            SessionInfo session,
+            PlaybackStopInfo info,
+            BaseItem libraryItem,
+            List<User> users)
+        {
+            var msString = (info.PositionTicks!.Value / 10000).ToString(CultureInfo.InvariantCulture);
+            _logger.LogInformation(
+                "User {0} stopped playback of '{1}' at {2}ms ({3} {4})",
+                session.UserName,
+                info.Item.Name,
+                msString,
+                session.Client,
+                session.ApplicationVersion);
+
+            var playedToCompletion = false;
+            if (libraryItem is not null)
+            {
+                foreach (var user in users)
+                {
+                    playedToCompletion = OnPlaybackStopped(user, libraryItem, info.PositionTicks, info.Failed);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(info.LiveStreamId))
+            {
+                await CloseLiveStreamIfNeededAsync(info.LiveStreamId, info.PlaySessionId).ConfigureAwait(false);
+            }
+
+            var eventArgs = new PlaybackStopEventArgs
+            {
+                Item = libraryItem,
+                Users = users,
+                PlaybackPositionTicks = info.PositionTicks,
+                PlayedToCompletion = playedToCompletion,
+                MediaSourceId = info.MediaSourceId,
+                MediaInfo = info.Item,
+                DeviceName = session.DeviceName,
+                ClientName = session.Client,
+                DeviceId = session.DeviceId,
+                Session = session,
+                PlaySessionId = info.PlaySessionId
+            };
+
+            await _eventManager.PublishAsync(eventArgs).ConfigureAwait(false);
+            EventHelper.QueueEventIfNotNull(PlaybackStopped, this, eventArgs, _logger);
         }
 
         /// <summary>
@@ -1589,22 +1732,89 @@ namespace Emby.Server.Implementations.Session
             return AuthenticateNewSessionInternal(request, false);
         }
 
-        internal async Task<AuthenticationResult> AuthenticateNewSessionInternal(AuthenticationRequest request, bool enforcePassword)
+        /// <inheritdoc />
+        public async Task<IProfileSwitchCredentialReservation> CreateProfileSwitchCredential(AuthenticationRequest request, Guid switchId)
+        {
+            CheckDisposed();
+            if (switchId == Guid.Empty)
+            {
+                throw new ArgumentException("Profile switch id must not be empty.", nameof(switchId));
+            }
+
+            ValidateAuthenticationRequest(request);
+            var user = GetRequestedUser(request);
+            if (user is null)
+            {
+                await _eventManager.PublishAsync(new AuthenticationRequestEventArgs(request)).ConfigureAwait(false);
+                throw new AuthenticationException("Invalid username or password entered.");
+            }
+
+            var admission = await ReserveSessionAdmissionAsync(user, request, excludeCurrentDeviceSession: true).ConfigureAwait(false);
+            try
+            {
+                var credential = CreateProfileSwitchAuthorizationCredential(
+                    user,
+                    request.DeviceId,
+                    request.App,
+                    request.AppVersion,
+                    request.DeviceName,
+                    switchId);
+                return new ProfileSwitchCredentialReservation(
+                    credential,
+                    admission,
+                    targetUser => EnsureSessionLimit(
+                        targetUser,
+                        request.DeviceId,
+                        excludeCurrentDeviceSession: true));
+            }
+            catch
+            {
+                await admission.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
+
+        /// <inheritdoc />
+        public async Task ValidateProfileSwitchSessionPolicyAsync(User user, string deviceId)
+        {
+            CheckDisposed();
+            ArgumentNullException.ThrowIfNull(user);
+            ArgumentException.ThrowIfNullOrEmpty(deviceId);
+
+            var admissionLock = _sessionAdmissionLocks.GetOrAdd(user.Id, _ => new SemaphoreSlim(1, 1));
+            await admissionLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                EnsureSessionLimit(user, deviceId, excludeCurrentDeviceSession: true);
+            }
+            finally
+            {
+                admissionLock.Release();
+            }
+        }
+
+        /// <inheritdoc />
+        public void RegisterCommittedProfileSwitchCredential(Device device)
+        {
+            CheckDisposed();
+            ArgumentNullException.ThrowIfNull(device);
+            if (!device.ProfileSwitchId.HasValue)
+            {
+                throw new ArgumentException("Only a profile-switch credential can be registered by this boundary.", nameof(device));
+            }
+
+            _deviceManager.RegisterDevice(device);
+        }
+
+        internal async Task<AuthenticationResult> AuthenticateNewSessionInternal(
+            AuthenticationRequest request,
+            bool enforcePassword)
         {
             CheckDisposed();
 
-            ArgumentException.ThrowIfNullOrEmpty(request.App);
-            ArgumentException.ThrowIfNullOrEmpty(request.DeviceId);
-            ArgumentException.ThrowIfNullOrEmpty(request.DeviceName);
-            ArgumentException.ThrowIfNullOrEmpty(request.AppVersion);
+            ValidateAuthenticationRequest(request);
 
-            User user = null;
-            if (!request.UserId.IsEmpty())
-            {
-                user = _userManager.GetUserById(request.UserId);
-            }
-
-            user ??= _userManager.GetUserByName(request.Username);
+            User user = GetRequestedUser(request);
 
             if (enforcePassword)
             {
@@ -1621,19 +1831,10 @@ namespace Emby.Server.Implementations.Session
                 throw new AuthenticationException("Invalid username or password entered.");
             }
 
-            if (!string.IsNullOrEmpty(request.DeviceId)
-                && !_deviceManager.CanAccessDevice(user, request.DeviceId))
-            {
-                throw new SecurityException("User is not allowed access from this device.");
-            }
-
-            int sessionsCount = Sessions.Count(i => i.UserId.Equals(user.Id));
-            int maxActiveSessions = user.MaxActiveSessions;
-            _logger.LogInformation("Current/Max sessions for user {User}: {Sessions}/{Max}", user.Username, sessionsCount, maxActiveSessions);
-            if (maxActiveSessions >= 1 && sessionsCount >= maxActiveSessions)
-            {
-                throw new SecurityException("User is at their maximum number of sessions.");
-            }
+            await using var admission = await ReserveSessionAdmissionAsync(
+                user,
+                request,
+                excludeCurrentDeviceSession: true).ConfigureAwait(false);
 
             var token = await GetAuthorizationToken(user, request.DeviceId, request.App, request.AppVersion, request.DeviceName).ConfigureAwait(false);
 
@@ -1688,6 +1889,139 @@ namespace Emby.Server.Implementations.Session
             return device.AccessToken;
         }
 
+        private Device CreateProfileSwitchAuthorizationCredential(
+            User user,
+            string deviceId,
+            string app,
+            string appVersion,
+            string deviceName,
+            Guid switchId)
+        {
+            var device = new Device(user.Id, app, appVersion, deviceName, deviceId)
+            {
+                ProfileSwitchId = switchId
+            };
+
+            _logger.LogInformation("Preparing profile-switch access token for user {UserId}", user.Id);
+            return device;
+        }
+
+        private static void ValidateAuthenticationRequest(AuthenticationRequest request)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            ArgumentException.ThrowIfNullOrEmpty(request.App);
+            ArgumentException.ThrowIfNullOrEmpty(request.DeviceId);
+            ArgumentException.ThrowIfNullOrEmpty(request.DeviceName);
+            ArgumentException.ThrowIfNullOrEmpty(request.AppVersion);
+        }
+
+        private User GetRequestedUser(AuthenticationRequest request)
+        {
+            User user = null;
+            if (!request.UserId.IsEmpty())
+            {
+                user = _userManager.GetUserById(request.UserId);
+            }
+
+            return user ?? _userManager.GetUserByName(request.Username);
+        }
+
+        private async Task<SessionAdmission> ReserveSessionAdmissionAsync(
+            User user,
+            AuthenticationRequest request,
+            bool excludeCurrentDeviceSession)
+        {
+            var admissionLock = _sessionAdmissionLocks.GetOrAdd(user.Id, _ => new SemaphoreSlim(1, 1));
+            await admissionLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                EnsureDeviceAndSessionPolicy(user, request, excludeCurrentDeviceSession);
+                return new SessionAdmission(admissionLock);
+            }
+            catch
+            {
+                admissionLock.Release();
+                throw;
+            }
+        }
+
+        private void EnsureDeviceAndSessionPolicy(User user, AuthenticationRequest request, bool excludeCurrentDeviceSession)
+        {
+            if (!_deviceManager.CanAccessDevice(user, request.DeviceId))
+            {
+                throw new SecurityException("User is not allowed access from this device.");
+            }
+
+            EnsureSessionLimit(user, request.DeviceId, excludeCurrentDeviceSession);
+        }
+
+        private void EnsureSessionLimit(User user, string deviceId, bool excludeCurrentDeviceSession)
+        {
+            var sessionsCount = Sessions.Count(
+                session => session.UserId.Equals(user.Id)
+                           && (!excludeCurrentDeviceSession
+                               || !string.Equals(session.DeviceId, deviceId, StringComparison.Ordinal)));
+            var maxActiveSessions = user.MaxActiveSessions;
+            _logger.LogInformation("Current/Max sessions for user {User}: {Sessions}/{Max}", user.Username, sessionsCount, maxActiveSessions);
+            if (maxActiveSessions >= 1 && sessionsCount >= maxActiveSessions)
+            {
+                throw new SecurityException("User is at their maximum number of sessions.");
+            }
+        }
+
+        private sealed class SessionAdmission : IAsyncDisposable
+        {
+            private SemaphoreSlim _admissionLock;
+
+            public SessionAdmission(SemaphoreSlim admissionLock)
+            {
+                _admissionLock = admissionLock;
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                Interlocked.Exchange(ref _admissionLock, null)?.Release();
+                return ValueTask.CompletedTask;
+            }
+        }
+
+        private sealed class ProfileSwitchCredentialReservation : IProfileSwitchCredentialReservation
+        {
+            private readonly SessionAdmission _admission;
+            private Action<User> _revalidateSessionPolicy;
+
+            public ProfileSwitchCredentialReservation(
+                Device credential,
+                SessionAdmission admission,
+                Action<User> revalidateSessionPolicy)
+            {
+                Credential = credential;
+                _admission = admission;
+                _revalidateSessionPolicy = revalidateSessionPolicy;
+            }
+
+            public Device Credential { get; }
+
+            public void RevalidateSessionPolicy(User user)
+            {
+                ArgumentNullException.ThrowIfNull(user);
+                if (!user.Id.Equals(Credential.UserId))
+                {
+                    throw new ArgumentException("The policy snapshot does not belong to the reserved user.", nameof(user));
+                }
+
+                var revalidate = Volatile.Read(ref _revalidateSessionPolicy)
+                    ?? throw new ObjectDisposedException(nameof(ProfileSwitchCredentialReservation));
+                revalidate(user);
+            }
+
+            public async ValueTask DisposeAsync()
+            {
+                Interlocked.Exchange(ref _revalidateSessionPolicy, null);
+                await _admission.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
         /// <inheritdoc />
         public async Task Logout(string accessToken)
         {
@@ -1735,6 +2069,73 @@ namespace Emby.Server.Implementations.Session
                     _logger.LogError(ex, "Error reporting session ended");
                 }
             }
+        }
+
+        /// <inheritdoc />
+        public async Task RevokeProfileSwitchCredential(Device device)
+        {
+            CheckDisposed();
+            ArgumentNullException.ThrowIfNull(device);
+            if (!device.ProfileSwitchId.HasValue)
+            {
+                throw new ArgumentException("Only a profile-switch credential can be revoked by this boundary.", nameof(device));
+            }
+
+            _logger.LogInformation(
+                "Revoking profile-switch credential for device {DeviceId} and user {UserId}",
+                device.DeviceId,
+                device.UserId);
+            await _deviceManager.DeleteDevice(device).ConfigureAwait(false);
+
+            if (_deviceManager.GetDevices(
+                    new DeviceQuery
+                    {
+                        UserId = device.UserId,
+                        DeviceId = device.DeviceId,
+                        Limit = 1
+                    }).Items.Count > 0)
+            {
+                return;
+            }
+
+            var sessions = Sessions
+                .Where(session => session.UserId.Equals(device.UserId)
+                                  && string.Equals(session.DeviceId, device.DeviceId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            foreach (var session in sessions)
+            {
+                await ReportSessionEnded(session.Id).ConfigureAwait(false);
+            }
+        }
+
+        /// <inheritdoc />
+        public async Task RevokeSupersededProfileCredential(Device device, Guid replacementSwitchId)
+        {
+            CheckDisposed();
+            ArgumentNullException.ThrowIfNull(device);
+            if (replacementSwitchId == Guid.Empty)
+            {
+                throw new ArgumentException("Replacement profile switch id must not be empty.", nameof(replacementSwitchId));
+            }
+
+            var replacementExists = _deviceManager.GetDevices(
+                new DeviceQuery
+                {
+                    UserId = device.UserId,
+                    DeviceId = device.DeviceId,
+                    ProfileSwitchId = replacementSwitchId,
+                    Limit = 1
+                }).Items.Count > 0;
+            if (!replacementExists)
+            {
+                throw new InvalidOperationException("A replacement credential is required before revoking a superseded profile credential.");
+            }
+
+            _logger.LogInformation(
+                "Revoking superseded profile credential for device {DeviceId} and user {UserId}",
+                device.DeviceId,
+                device.UserId);
+            await _deviceManager.DeleteDevice(device).ConfigureAwait(false);
         }
 
         /// <inheritdoc />

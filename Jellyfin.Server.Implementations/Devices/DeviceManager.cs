@@ -109,6 +109,54 @@ namespace Jellyfin.Server.Implementations.Devices
         }
 
         /// <inheritdoc />
+        public void RegisterDevice(Device device)
+        {
+            ArgumentNullException.ThrowIfNull(device);
+            if (device.Id <= 0)
+            {
+                throw new ArgumentException("Only a persisted device can be registered.", nameof(device));
+            }
+
+            if (_devices.TryGetValue(device.Id, out var existingDevice))
+            {
+                EnsureSameCredential(existingDevice, device);
+                return;
+            }
+
+            if (!_devices.TryAdd(device.Id, device))
+            {
+                EnsureSameCredential(_devices[device.Id], device);
+            }
+        }
+
+        /// <inheritdoc />
+        public async Task<Device?> ReconcileDevice(int authenticationDeviceId)
+        {
+            if (authenticationDeviceId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(authenticationDeviceId));
+            }
+
+            var dbContext = await _dbProvider.CreateDbContextAsync().ConfigureAwait(false);
+            await using (dbContext.ConfigureAwait(false))
+            {
+                var persistedDevice = await dbContext.Devices
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(device => device.Id == authenticationDeviceId)
+                    .ConfigureAwait(false);
+                if (persistedDevice is null)
+                {
+                    _devices.TryRemove(authenticationDeviceId, out _);
+                    return null;
+                }
+
+                RegisterDevice(persistedDevice);
+                _devices[authenticationDeviceId] = persistedDevice;
+                return persistedDevice;
+            }
+        }
+
+        /// <inheritdoc />
         public DeviceOptionsDto? GetDeviceOptions(string deviceId)
         {
             if (_deviceOptions.TryGetValue(deviceId, out var deviceOptions))
@@ -149,6 +197,7 @@ namespace Jellyfin.Server.Implementations.Devices
                 .Where(device => !query.UserId.HasValue || device.UserId.Equals(query.UserId.Value))
                 .Where(device => query.DeviceId is null || device.DeviceId == query.DeviceId)
                 .Where(device => query.AccessToken is null || device.AccessToken == query.AccessToken)
+                .Where(device => !query.ProfileSwitchId.HasValue || device.ProfileSwitchId.Equals(query.ProfileSwitchId.Value))
                 .OrderBy(d => d.Id)
                 .ToList();
             var count = devices.Count();
@@ -209,13 +258,28 @@ namespace Jellyfin.Server.Implementations.Devices
         /// <inheritdoc />
         public async Task DeleteDevice(Device device)
         {
-            _devices.TryRemove(device.Id, out _);
             var dbContext = await _dbProvider.CreateDbContextAsync().ConfigureAwait(false);
             await using (dbContext.ConfigureAwait(false))
             {
                 dbContext.Devices.Remove(device);
-                await dbContext.SaveChangesAsync().ConfigureAwait(false);
+                try
+                {
+                    await dbContext.SaveChangesAsync().ConfigureAwait(false);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    var credentialStillExists = await dbContext.Devices
+                        .AsNoTracking()
+                        .AnyAsync(candidate => candidate.Id == device.Id)
+                        .ConfigureAwait(false);
+                    if (credentialStillExists)
+                    {
+                        throw;
+                    }
+                }
             }
+
+            _devices.TryRemove(device.Id, out _);
         }
 
         /// <inheritdoc />
@@ -244,6 +308,17 @@ namespace Jellyfin.Server.Implementations.Devices
 
             return user.GetPreference(PreferenceKind.EnabledDevices).Contains(deviceId, StringComparison.OrdinalIgnoreCase)
                    || !GetCapabilities(deviceId).SupportsPersistentIdentifier;
+        }
+
+        private static void EnsureSameCredential(Device registered, Device persisted)
+        {
+            if (!string.Equals(registered.AccessToken, persisted.AccessToken, StringComparison.Ordinal)
+                || !registered.UserId.Equals(persisted.UserId)
+                || !string.Equals(registered.DeviceId, persisted.DeviceId, StringComparison.Ordinal)
+                || registered.ProfileSwitchId != persisted.ProfileSwitchId)
+            {
+                throw new InvalidOperationException("Another credential is already registered for this database id.");
+            }
         }
 
         private DeviceInfo ToDeviceInfo(Device authInfo, DeviceOptions? options = null)

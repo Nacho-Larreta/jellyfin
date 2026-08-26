@@ -69,6 +69,16 @@ public class JellyfinDbContext(DbContextOptions<JellyfinDbContext> options, ILog
     public DbSet<ProfileSelectorDeviceState> ProfileSelectorDeviceStates => Set<ProfileSelectorDeviceState>();
 
     /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> containing durable profile switch operations.
+    /// </summary>
+    public DbSet<ProfileSelectorSwitchOperation> ProfileSelectorSwitchOperations => Set<ProfileSelectorSwitchOperation>();
+
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> containing idempotent profile-switch playback stop receipts.
+    /// </summary>
+    public DbSet<ProfileSelectorPlaybackStopReport> ProfileSelectorPlaybackStopReports => Set<ProfileSelectorPlaybackStopReport>();
+
+    /// <summary>
     /// Gets the <see cref="DbSet{TEntity}"/> containing profile search history entries.
     /// </summary>
     public DbSet<ProfileSearchHistoryEntry> ProfileSearchHistoryEntries => Set<ProfileSearchHistoryEntry>();

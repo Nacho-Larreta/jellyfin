@@ -52,6 +52,11 @@ namespace Jellyfin.Database.Implementations.Entities.Security
         public string AccessToken { get; set; }
 
         /// <summary>
+        /// Gets or sets the durable profile switch that created this runtime credential.
+        /// </summary>
+        public Guid? ProfileSwitchId { get; set; }
+
+        /// <summary>
         /// Gets or sets the app name.
         /// </summary>
         [MaxLength(64)]
