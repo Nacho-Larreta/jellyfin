@@ -1,7 +1,11 @@
+using System;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Jellyfin.Api.Models.ProfileSelectorsDtos;
+using Jellyfin.Database.Implementations;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Jellyfin.Server.Integration.Tests.Users;
@@ -121,5 +125,61 @@ public sealed class ProfileSelectorPinContractTests : IClassFixture<JellyfinAppl
             context.JsonOptions,
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, validPinResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExpiredLockout_AllowsCorrectPinAndClearsFailedAttempts()
+    {
+        using var factory = new JellyfinApplicationFactory();
+        var context = await ProfileSelectorApiTestContext.CreateAsync(factory);
+        const string configuredPin = "1234";
+
+        using (var response = await context.OwnerClient.PostAsJsonAsync(
+                   context.PinUrl,
+                   new ProfilePinUpdateRequestDto { Pin = configuredPin },
+                   context.JsonOptions,
+                   TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            using var response = await context.OwnerClient.PostAsJsonAsync(
+                context.ActivationUrl,
+                new ProfileActivationRequestDto { Pin = "9999" },
+                context.JsonOptions,
+                TestContext.Current.CancellationToken);
+            Assert.Equal(attempt < 3 ? HttpStatusCode.Forbidden : HttpStatusCode.Locked, response.StatusCode);
+        }
+
+        var dbContextFactory = factory.Services.GetRequiredService<IDbContextFactory<JellyfinDbContext>>();
+        await using (var dbContext = await dbContextFactory.CreateDbContextAsync(TestContext.Current.CancellationToken))
+        {
+            var member = await dbContext.ProfileSelectorMembers.SingleAsync(
+                entity => entity.ProfileUserId.Equals(context.ProfileId),
+                TestContext.Current.CancellationToken);
+            Assert.Equal(3, member.FailedPinAttemptCount);
+            Assert.True(member.PinLockoutUntilUtc > DateTime.UtcNow);
+            member.PinLockoutUntilUtc = DateTime.UtcNow.AddMinutes(-1);
+            await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        using (var response = await context.OwnerClient.PostAsJsonAsync(
+                   context.ActivationUrl,
+                   new ProfileActivationRequestDto { Pin = configuredPin },
+                   context.JsonOptions,
+                   TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        await using var verificationContext = await dbContextFactory.CreateDbContextAsync(TestContext.Current.CancellationToken);
+        var recoveredMember = await verificationContext.ProfileSelectorMembers.SingleAsync(
+            entity => entity.ProfileUserId.Equals(context.ProfileId),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(0, recoveredMember.FailedPinAttemptCount);
+        Assert.Null(recoveredMember.PinLockoutUntilUtc);
+        Assert.Null(recoveredMember.LastFailedPinAttemptUtc);
     }
 }
