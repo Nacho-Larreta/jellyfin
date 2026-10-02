@@ -43,7 +43,7 @@ public sealed class ProfileSelectorPinContractTests : IClassFixture<JellyfinAppl
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         }
 
-        foreach (var validPin in new[] { "1234", "0123", "12345678" })
+        foreach (var validPin in new[] { "1234", "0123", "123456", "1234567", "12345678" })
         {
             using var response = await context.OwnerClient.PostAsJsonAsync(
                 context.PinUrl,
